@@ -4,6 +4,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
 enum AiDifficulty { easy, medium, hard }
+
 enum AiState { wandering, chasing, fleeing, avoiding_boundary, seeking_center }
 
 class AiSnakeData {
@@ -16,8 +17,8 @@ class AiSnakeData {
 
   Rect boundingBox = Rect.zero;
 
-  double headRadius;
-  double bodyRadius;
+  double headRadius = 0;
+  double bodyRadius = 0;
   final double segmentSpacing;
   double speed;
   int segmentCount;
@@ -31,12 +32,12 @@ class AiSnakeData {
     required this.position,
     required this.skinColors,
     required this.targetDirection,
-    required this.headRadius,
-    required this.bodyRadius,
     required this.segmentSpacing,
     required this.speed,
     required this.segmentCount,
     required this.minRadius,
     required this.maxRadius,
-  });
+  }) {
+    aiState = AiState.wandering;
+  }
 }

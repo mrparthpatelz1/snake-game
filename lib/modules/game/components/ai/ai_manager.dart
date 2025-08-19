@@ -10,508 +10,367 @@ import '../food/food_manager.dart';
 import '../player/player_component.dart';
 import 'ai_snake_data.dart';
 
-
-
 class AiManager extends Component with HasGameReference<SlitherGame> {
-  final int numberOfSnakes = 100;
+  final int numberOfSnakes = 70; // Reduced for performance
   final Random _random = Random();
   final FoodManager foodManager;
   final PlayerComponent player;
   final List<AiSnakeData> snakes = [];
 
-  AiManager({required this.foodManager, required this.player});
-
   late final List<Rect> _spawnZones;
   int _nextZoneIndex = 0;
 
+  // For batched updates
+  int _updateIndex = 0;
+  static const int _batchSize = 10;
+
+  AiManager({required this.foodManager, required this.player});
 
   @override
   Future<void> onLoad() async {
     super.onLoad();
-    for (int i = 0; i < numberOfSnakes; i++) {
-      _initializeSpawnZones();
-      _spawnSnake();
-    }
+    _initializeSpawnZones();
+    _spawnAllSnakes();
   }
 
   @override
   void update(double dt) {
     super.update(dt);
 
-    // Get camera visible area for performance optimization
-    final SlitherGame slitherGame = game;
-    final visibleRect = slitherGame.cameraComponent.visibleWorldRect.inflate(500);
+    int total = snakes.length;
+    int end = _updateIndex + _batchSize;
 
-    for (final snake in snakes) {
-      _updateBoundingBox(snake);
-
-      // Always update snakes that are near boundaries, regardless of visibility
-      if (_isNearAnyBoundary(snake.position, 1000.0) || visibleRect.overlaps(snake.boundingBox)) {
+    for (int i = 0; i < total; i++) {
+      AiSnakeData snake = snakes[i];
+      if (i >= _updateIndex && i < end) {
         _updateActiveSnake(snake, dt);
       } else {
         _updatePassiveSnake(snake, dt);
       }
     }
-  }
 
-  void _updateBoundingBox(AiSnakeData snake) {
-    double minX = snake.position.x;
-    double maxX = snake.position.x;
-    double minY = snake.position.y;
-    double maxY = snake.position.y;
-
-    for (final segment in snake.bodySegments) {
-      minX = min(minX, segment.x);
-      maxX = max(maxX, segment.x);
-      minY = min(minY, segment.y);
-      maxY = max(maxY, segment.y);
-    }
-    snake.boundingBox = Rect.fromLTRB(minX - 32, minY - 32, maxX + 32, maxY + 32);
+    _updateIndex = end % total;
   }
 
   void _updatePassiveSnake(AiSnakeData snake, double dt) {
-    // For off-screen snakes, use simple movement but with boundary checks
-
-    // Critical: Check if snake is too close to boundary
-    if (_isNearAnyBoundary(snake.position, 800.0)) {
-      _updateActiveSnake(snake, dt); // Force active update for boundary snakes
-      return;
+    // Move forward only
+    final dir = Vector2(cos(snake.angle), sin(snake.angle));
+    final mv = dir * snake.speed * dt;
+    snake.position.add(mv);
+    for (final seg in snake.bodySegments) {
+      seg.add(mv);
     }
-
-    // Simple movement for distant snakes
-    final direction = Vector2(cos(snake.angle), sin(snake.angle));
-    final moveVector = direction * snake.speed * dt;
-
-    snake.position.add(moveVector);
-    for (final segment in snake.bodySegments) {
-      segment.add(moveVector);
-    }
-  }
-
-  void _updateActiveSnake(AiSnakeData snake, double dt) {
-    // Update AI state based on position and environment
-    _determineAiState(snake);
-
-    // Get target direction based on current state
-    Vector2 targetDirection = _calculateTargetDirection(snake);
-
-    // Apply the direction
-    snake.targetDirection = targetDirection;
-
-    // Move the snake
-    _moveSnakeSmooth(snake, dt);
-
-    // Update body following
-    _updateSnakeBody(snake);
-
-    // Check for food consumption
-    _checkFoodConsumption(snake);
-  }
-
-  void _determineAiState(AiSnakeData snake) {
-    final pos = snake.position;
-
-    // Critical boundary check - highest priority
-    if (_isNearAnyBoundary(pos, 600.0)) {
-      snake.aiState = AiState.avoiding_boundary;
-      return;
-    }
-
-    // If snake was avoiding boundary but now safe, seek center
-    if (snake.aiState == AiState.avoiding_boundary && !_isNearAnyBoundary(pos, 800.0)) {
-      snake.aiState = AiState.seeking_center;
-      return;
-    }
-
-    // Check distance to center - if too far out, seek center
-    final distanceFromCenter = pos.distanceTo(Vector2.zero());
-    final worldSize = min(SlitherGame.worldBounds.width, SlitherGame.worldBounds.height);
-    if (distanceFromCenter > worldSize * 0.3) {
-      snake.aiState = AiState.seeking_center;
-      return;
-    }
-
-    // Player interaction logic
-    final distanceToPlayer = pos.distanceTo(player.position);
-    if (distanceToPlayer < 500.0) {
-      if (snake.bodySegments.length > player.bodySegments.length + 3) {
-        snake.aiState = AiState.chasing;
-      } else if (snake.bodySegments.length < player.bodySegments.length - 3) {
-        snake.aiState = AiState.fleeing;
-      } else {
-        snake.aiState = AiState.wandering;
-      }
-      return;
-    }
-
-    // Default wandering behavior
-    snake.aiState = AiState.wandering;
-  }
-
-  Vector2 _calculateTargetDirection(AiSnakeData snake) {
-    switch (snake.aiState) {
-      case AiState.avoiding_boundary:
-        return _getBoundaryAvoidanceDirection(snake);
-
-      case AiState.seeking_center:
-        return _getCenterSeekingDirection(snake);
-
-      case AiState.chasing:
-        return _getChaseDirection(snake);
-
-      case AiState.fleeing:
-        return _getFleeDirection(snake);
-
-      case AiState.wandering:
-        return _getWanderDirection(snake);
-    }
-  }
-
-  Vector2 _getBoundaryAvoidanceDirection(AiSnakeData snake) {
-    final pos = snake.position;
-    final bounds = SlitherGame.playArea;
-    Vector2 avoidanceForce = Vector2.zero();
-
-    // Calculate repulsion from each boundary
-    final leftDist = pos.x - bounds.left;
-    final rightDist = bounds.right - pos.x;
-    final topDist = pos.y - bounds.top;
-    final bottomDist = bounds.bottom - pos.y;
-
-    const safeDistance = 800.0;
-
-    // Apply strong repulsion forces
-    if (leftDist < safeDistance) {
-      final force = (safeDistance - leftDist) / safeDistance;
-      avoidanceForce.x += force * force; // Quadratic falloff for stronger close-range force
-    }
-
-    if (rightDist < safeDistance) {
-      final force = (safeDistance - rightDist) / safeDistance;
-      avoidanceForce.x -= force * force;
-    }
-
-    if (topDist < safeDistance) {
-      final force = (safeDistance - topDist) / safeDistance;
-      avoidanceForce.y += force * force;
-    }
-
-    if (bottomDist < safeDistance) {
-      final force = (safeDistance - bottomDist) / safeDistance;
-      avoidanceForce.y -= force * force;
-    }
-
-    // If no clear avoidance direction, head to center
-    if (avoidanceForce.length < 0.1) {
-      avoidanceForce = (Vector2.zero() - pos).normalized();
-    }
-
-    return avoidanceForce.normalized();
-  }
-
-  Vector2 _getCenterSeekingDirection(AiSnakeData snake) {
-    final pos = snake.position;
-    final centerDirection = (Vector2.zero() - pos).normalized();
-
-    // Add some randomness to prevent all snakes following exact same path
-    final randomOffset = Vector2(
-      (_random.nextDouble() - 0.5) * 0.3,
-      (_random.nextDouble() - 0.5) * 0.3,
-    );
-
-    return (centerDirection + randomOffset).normalized();
-  }
-
-  Vector2 _getChaseDirection(AiSnakeData snake) {
-    final directionToPlayer = (player.position - snake.position).normalized();
-
-    // Add prediction - where will player be?
-    final playerVelocity = player.playerController.targetDirection;
-    final predictedPlayerPos = player.position + playerVelocity * 50.0;
-    final directionToPredicted = (predictedPlayerPos - snake.position).normalized();
-
-    // Blend current and predicted positions
-    return (directionToPlayer * 0.7 + directionToPredicted * 0.3).normalized();
-  }
-
-  Vector2 _getFleeDirection(AiSnakeData snake) {
-    final fleeDirection = (snake.position - player.position).normalized();
-
-    // Add perpendicular component for more natural fleeing
-    final perpendicular = Vector2(-fleeDirection.y, fleeDirection.x);
-    final randomPerp = perpendicular * ((_random.nextDouble() - 0.5) * 0.4);
-
-    return (fleeDirection + randomPerp).normalized();
-  }
-
-  Vector2 _getWanderDirection(AiSnakeData snake) {
-    // Look for nearby food first
-    final nearestFood = _findNearestFood(snake.position, 300.0);
-    if (nearestFood != null) {
-      return (nearestFood.position - snake.position).normalized();
-    }
-
-    // Smooth wandering with occasional direction changes
-    if (_random.nextDouble() < 0.008) { // Less frequent direction changes
-      final currentDir = Vector2(cos(snake.angle), sin(snake.angle));
-      final turnAngle = (_random.nextDouble() - 0.5) * pi * 0.6; // Max 108 degree turn
-
-      final newDir = Vector2(
-        currentDir.x * cos(turnAngle) - currentDir.y * sin(turnAngle),
-        currentDir.x * sin(turnAngle) + currentDir.y * cos(turnAngle),
-      );
-
-      return newDir.normalized();
-    }
-
-    // Continue current direction with slight center bias
-    final currentDir = Vector2(cos(snake.angle), sin(snake.angle));
-    final centerBias = (Vector2.zero() - snake.position).normalized() * 0.1;
-
-    return (currentDir + centerBias).normalized();
-  }
-
-  void _moveSnakeSmooth(AiSnakeData snake, double dt) {
-    // Smooth rotation towards target
-    final targetAngle = snake.targetDirection.screenAngle();
-    final currentAngle = snake.angle;
-    final angleDiff = _normalizeAngle(targetAngle - currentAngle);
-
-    // Dynamic rotation speed based on how far we need to turn
-    final baseRotationSpeed = 2.5 * pi;
-    final urgencyMultiplier = snake.aiState == AiState.avoiding_boundary ? 2.0 : 1.0;
-    final rotationSpeed = baseRotationSpeed * urgencyMultiplier;
-
-    final maxRotation = rotationSpeed * dt;
-
-    if (angleDiff.abs() <= maxRotation) {
-      snake.angle = targetAngle;
-    } else {
-      snake.angle += maxRotation * angleDiff.sign;
-    }
-
-    // Move forward in the direction we're facing
-    final moveDirection = Vector2(cos(snake.angle), sin(snake.angle));
-    final moveDistance = snake.speed * dt;
-
-    snake.position.add(moveDirection * moveDistance);
-
-    // Critical: Hard boundary enforcement as last resort
+    // Hard clamp
     _enforceHardBoundaries(snake);
   }
 
-  void _enforceHardBoundaries(AiSnakeData snake) {
+  void _updateActiveSnake(AiSnakeData snake, double dt) {
+    _determineAiState(snake);
+    Vector2 target = _calculateTargetDirection(snake);
+    snake.targetDirection = target;
+    _moveSnakeSmooth(snake, dt);
+    _updateSnakeBody(snake);
+    _checkFoodConsumption(snake);
+  }
+
+  void _determineAiState(AiSnakeData s) {
+    Vector2 pos = s.position;
     final bounds = SlitherGame.playArea;
-    final margin = 50.0; // Small margin to prevent exact boundary touching
-
-    bool hitBoundary = false;
-
-    if (snake.position.x <= bounds.left + margin) {
-      snake.position.x = bounds.left + margin;
-      snake.angle = 0.0; // Face right
-      snake.targetDirection = Vector2(1, 0);
-      hitBoundary = true;
-    } else if (snake.position.x >= bounds.right - margin) {
-      snake.position.x = bounds.right - margin;
-      snake.angle = pi; // Face left
-      snake.targetDirection = Vector2(-1, 0);
-      hitBoundary = true;
+    if (!_isInsideBounds(pos, bounds.deflate(200))) {
+      s.aiState = AiState.avoiding_boundary;
+      return;
     }
-
-    if (snake.position.y <= bounds.top + margin) {
-      snake.position.y = bounds.top + margin;
-      snake.angle = pi / 2; // Face down
-      snake.targetDirection = Vector2(0, 1);
-      hitBoundary = true;
-    } else if (snake.position.y >= bounds.bottom - margin) {
-      snake.position.y = bounds.bottom - margin;
-      snake.angle = -pi / 2; // Face up
-      snake.targetDirection = Vector2(0, -1);
-      hitBoundary = true;
+    final distCenter = pos.distanceTo(Vector2.zero());
+    final worldSize = min(
+      SlitherGame.worldBounds.width,
+      SlitherGame.worldBounds.height,
+    );
+    if (distCenter > worldSize * 0.3) {
+      s.aiState = AiState.seeking_center;
+      return;
     }
+    final dPlayer = pos.distanceTo(player.position);
+    if (dPlayer < 500) {
+      if (s.segmentCount > player.bodySegments.length + 3) {
+        s.aiState = AiState.chasing;
+      } else if (s.segmentCount < player.bodySegments.length - 3) {
+        s.aiState = AiState.fleeing;
+      } else {
+        s.aiState = AiState.wandering;
+      }
+      return;
+    }
+    s.aiState = AiState.wandering;
+  }
 
-    if (hitBoundary) {
-      snake.aiState = AiState.seeking_center;
+  Vector2 _calculateTargetDirection(AiSnakeData s) {
+    switch (s.aiState) {
+      case AiState.avoiding_boundary:
+        return _getBoundaryAvoidanceDirection(s);
+      case AiState.seeking_center:
+        return _getCenterSeekingDirection(s);
+      case AiState.chasing:
+        return _getChaseDirection(s);
+      case AiState.fleeing:
+        return _getFleeDirection(s);
+      case AiState.wandering:
+        return _getWanderDirection(s);
     }
   }
 
-  bool _isNearAnyBoundary(Vector2 position, double threshold) {
-    final bounds = SlitherGame.playArea;
-    return position.x < bounds.left + threshold ||
-        position.x > bounds.right - threshold ||
-        position.y < bounds.top + threshold ||
-        position.y > bounds.bottom - threshold;
+  Vector2 _getBoundaryAvoidanceDirection(AiSnakeData s) {
+    final pos = s.position;
+    final b = SlitherGame.playArea;
+    Vector2 force = Vector2.zero();
+    const safe = 800.0;
+    if (pos.x - b.left < safe) {
+      force.x += pow((safe - (pos.x - b.left)) / safe, 2);
+    }
+    if (b.right - pos.x < safe) {
+      force.x -= pow((safe - (b.right - pos.x)) / safe, 2);
+    }
+    if (pos.y - b.top < safe) {
+      force.y += pow((safe - (pos.y - b.top)) / safe, 2);
+    }
+    if (b.bottom - pos.y < safe) {
+      force.y -= pow((safe - (b.bottom - pos.y)) / safe, 2);
+    }
+    if (force.length < 0.1) {
+      force = (Vector2.zero() - pos).normalized();
+    }
+    return force.normalized();
+  }
+
+  Vector2 _getCenterSeekingDirection(AiSnakeData s) {
+    final dir = (Vector2.zero() - s.position).normalized();
+    final rnd = Vector2(
+      (_random.nextDouble() - 0.5) * 0.3,
+      (_random.nextDouble() - 0.5) * 0.3,
+    );
+    return (dir + rnd).normalized();
+  }
+
+  Vector2 _getChaseDirection(AiSnakeData s) {
+    final toPlayer = (player.position - s.position).normalized();
+    final predPos =
+        player.position + player.playerController.targetDirection * 50;
+    final toPred = (predPos - s.position).normalized();
+    return (toPlayer * 0.7 + toPred * 0.3).normalized();
+  }
+
+  Vector2 _getFleeDirection(AiSnakeData s) {
+    final flee = (s.position - player.position).normalized();
+    final perp = Vector2(-flee.y, flee.x);
+    final rnd = perp * ((_random.nextDouble() - 0.5) * 0.4);
+    return (flee + rnd).normalized();
+  }
+
+  Vector2 _getWanderDirection(AiSnakeData s) {
+    final food = _findNearestFood(s.position, 300);
+    if (food != null) {
+      return (food.position - s.position).normalized();
+    }
+    if (_random.nextDouble() < 0.008) {
+      final cd = Vector2(cos(s.angle), sin(s.angle));
+      final turn = (_random.nextDouble() - 0.5) * pi * 0.6;
+      final nd = Vector2(
+        cd.x * cos(turn) - cd.y * sin(turn),
+        cd.x * sin(turn) + cd.y * cos(turn),
+      );
+      return nd.normalized();
+    }
+    final cd = Vector2(cos(s.angle), sin(s.angle));
+    final bias = (Vector2.zero() - s.position).normalized() * 0.1;
+    return (cd + bias).normalized();
+  }
+
+  void _moveSnakeSmooth(AiSnakeData s, double dt) {
+    final tgt = s.targetDirection.screenAngle();
+    final cur = s.angle;
+    final diff = _normalizeAngle(tgt - cur);
+    final base = 2.5 * pi;
+    final um = s.aiState == AiState.avoiding_boundary ? 2.0 : 1.0;
+    final rs = base * um;
+    final rot = rs * dt;
+    s.angle = diff.abs() <= rot ? tgt : cur + rot * diff.sign;
+    final mv = Vector2(cos(s.angle), sin(s.angle)) * s.speed * dt;
+    s.position.add(mv);
+    _enforceHardBoundaries(s);
   }
 
   double _normalizeAngle(double angle) {
-    while (angle > pi) angle -= 2 * pi;
-    while (angle < -pi) angle += 2 * pi;
+    while (angle > pi) {
+      angle -= 2 * pi;
+    }
+    while (angle < -pi) {
+      angle += 2 * pi;
+    }
     return angle;
   }
 
-  void _updateSnakeBody(AiSnakeData snake) {
-    // Update path tracking
-    if (snake.path.isEmpty || snake.position.distanceTo(snake.path.first) > 2.0) {
-      snake.path.insert(0, snake.position.clone());
-    }
+  void _enforceHardBoundaries(AiSnakeData s) {
+    final b = SlitherGame.playArea;
+    if (s.position.x < b.left) s.position.x = b.left;
+    if (s.position.x > b.right) s.position.x = b.right;
+    if (s.position.y < b.top) s.position.y = b.top;
+    if (s.position.y > b.bottom) s.position.y = b.bottom;
+    final centerDir = (Vector2.zero() - s.position).normalized();
+    s.targetDirection = centerDir;
+    s.angle = centerDir.screenAngle();
+  }
 
-    // Update body segments to follow the path
-    for (int i = 0; i < snake.bodySegments.length; i++) {
-      final targetDistance = (i + 1) * snake.segmentSpacing;
-      snake.bodySegments[i].setFrom(_getPointOnPath(snake, targetDistance));
-    }
+  bool _isInsideBounds(Vector2 p, Rect r) =>
+      p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom;
 
-    // Limit path length for memory efficiency
-    final maxPathLength = snake.bodySegments.length * 3 + 20;
-    if (snake.path.length > maxPathLength) {
-      snake.path.removeRange(maxPathLength, snake.path.length);
+  void _updateSnakeBody(AiSnakeData s) {
+    if (s.path.isEmpty ||
+        s.position.distanceTo(s.path.first) > 2) {
+      s.path.insert(0, s.position.clone());
+    }
+    for (int i = 0; i < s.bodySegments.length; i++) {
+      final d = (i + 1) * s.segmentSpacing;
+      s.bodySegments[i].setFrom(_getPointOnPath(s, d));
+    }
+    final maxLen = s.bodySegments.length * 3 + 20;
+    if (s.path.length > maxLen) {
+      s.path.removeRange(maxLen, s.path.length);
     }
   }
 
-  Vector2 _getPointOnPath(AiSnakeData snake, double distance) {
-    final fullPath = [snake.position, ...snake.path];
-
-    if (fullPath.length < 2) return snake.position.clone();
-
-    double accumulatedDistance = 0.0;
-
-    for (int i = 0; i < fullPath.length - 1; i++) {
-      final segmentStart = fullPath[i];
-      final segmentEnd = fullPath[i + 1];
-      final segmentLength = segmentStart.distanceTo(segmentEnd);
-
-      if (accumulatedDistance + segmentLength >= distance) {
-        final remainingDistance = distance - accumulatedDistance;
-        final direction = (segmentEnd - segmentStart).normalized();
-        return segmentStart + direction * remainingDistance;
+  Vector2 _getPointOnPath(AiSnakeData s, double dist) {
+    final path = [s.position, ...s.path];
+    double acc = 0;
+    for (int i = 0; i < path.length - 1; i++) {
+      final p1 = path[i], p2 = path[i + 1];
+      final segLen = p1.distanceTo(p2);
+      if (acc + segLen >= dist) {
+        final need = dist - acc;
+        return p1 + (p2 - p1).normalized() * need;
       }
-
-      accumulatedDistance += segmentLength;
+      acc += segLen;
     }
-
-    return fullPath.last.clone();
+    return path.last.clone();
   }
 
-  void _checkFoodConsumption(AiSnakeData snake) {
-    final eatRadius = snake.headRadius + 10.0;
-    final eatRadiusSquared = eatRadius * eatRadius;
-    final eatenFood = <FoodModel>[];
-
-    for (final food in foodManager.foodList) {
-      if (snake.position.distanceToSquared(food.position) <= eatRadiusSquared) {
-        eatenFood.add(food);
+  void _checkFoodConsumption(AiSnakeData s) {
+    final eR = s.headRadius + 10;
+    final region = Rect.fromCircle(
+      center: s.position.toOffset(),
+      radius: eR + 100,
+    );
+    for (final food in foodManager.foodList.where(
+            (f) => region.contains(f.position.toOffset()))) {
+      if (s.position.distanceToSquared(food.position) <= eR * eR) {
+        foodManager.removeFood(food);
+        _growSnake(s, food.growth);
+        foodManager.spawnFood();
       }
     }
-
-    for (final food in eatenFood) {
-      foodManager.removeFood(food);
-      _growSnake(snake, food.growth);
-      foodManager.spawnFood();
-    }
   }
 
-  FoodModel? _findNearestFood(Vector2 position, double maxDistance) {
+  FoodModel? _findNearestFood(Vector2 p, double md) {
     FoodModel? nearest;
-    double nearestDistanceSquared = maxDistance * maxDistance;
-
-    for (final food in foodManager.foodList) {
-      final distanceSquared = position.distanceToSquared(food.position);
-      if (distanceSquared < nearestDistanceSquared) {
-        nearest = food;
-        nearestDistanceSquared = distanceSquared;
+    double best = md * md;
+    for (final f in foodManager.foodList) {
+      final ds = p.distanceToSquared(f.position);
+      if (ds < best) {
+        nearest = f;
+        best = ds;
       }
     }
-
     return nearest;
   }
 
-  /// Call this once at startup to build your zone grid.
   void _initializeSpawnZones() {
-    final bounds = SlitherGame.worldBounds;
-    // Decide how many rows/columns you want, e.g., a 10×10 grid for 100 snakes.
-    final gridSize = sqrt(numberOfSnakes).floor(); // e.g. 10
-    final zoneWidth  = bounds.width  / gridSize;
-    final zoneHeight = bounds.height / gridSize;
-
-    _spawnZones = List.generate(gridSize * gridSize, (i) {
-      final row = i ~/ gridSize;
-      final col = i %  gridSize;
+    const m = 200.0;
+    final b = SlitherGame.worldBounds.deflate(m);
+    final grid = (sqrt(numberOfSnakes)).ceil();
+    final w = b.width / grid, h = b.height / grid;
+    _spawnZones = List.generate(grid * grid, (i) {
+      final r = i ~/ grid, c = i % grid;
       return Rect.fromLTWH(
-        bounds.left   + col * zoneWidth,
-        bounds.top    + row * zoneHeight,
-        zoneWidth,
-        zoneHeight,
+        b.left + c * w,
+        b.top + r * h,
+        w, h,
       );
-    });
-
-    _spawnZones.shuffle(_random);
+    })..shuffle(_random);
   }
 
-  /// Spawns snakes one per zone (or more evenly if fewer/more snakes than zones).
+  void _spawnAllSnakes() {
+    for (int i = 0; i < numberOfSnakes; i++) {
+      _spawnSnake();
+    }
+  }
+
   void _spawnSnake() {
-    // Pick the next zone in a round-robin fashion
     final zone = _spawnZones[_nextZoneIndex++ % _spawnZones.length];
+    final x = zone.left + _random.nextDouble() * zone.width;
+    final y = zone.top + _random.nextDouble() * zone.height;
+    final pos = Vector2(x, y);
 
-    // Now choose a random point inside that zone:
-    final x = zone.left   + _random.nextDouble() * zone.width;
-    final y = zone.top    + _random.nextDouble() * zone.height;
-    final position = Vector2(x, y);
-
-    // The rest of your existing initialization...
-    final initialDirection = Vector2.random(_random)..normalize();
-    final headRadius = 12.0 + _random.nextDouble() * 6.0;
+    final initCount = 8 + _random.nextInt(12);
     final snakeData = AiSnakeData(
-      position: position,
+      position: pos,
       skinColors: _getRandomSkin(),
-      targetDirection: initialDirection,
-      headRadius: headRadius,
-      bodyRadius: headRadius - 1.0,
-      segmentSpacing: headRadius * 0.6,
+      targetDirection: Vector2.random(_random).normalized(),
+      segmentCount: initCount,
+      segmentSpacing: 13.0 * 0.6,
       speed: 80.0 + _random.nextDouble() * 40.0,
-      segmentCount: 8 + _random.nextInt(12),
-      minRadius: headRadius,
-      maxRadius: 35.0,
+      minRadius: 12.0,
+      maxRadius: 40.0,
     );
-    // …
+
+    final bonus = (initCount / 25).floor().toDouble();
+    snakeData.headRadius =
+        (12.0 + bonus).clamp(snakeData.minRadius, snakeData.maxRadius);
+    snakeData.bodyRadius = snakeData.headRadius - 1.0;
+
+    snakeData.bodySegments.clear();
+    snakeData.path.clear();
+    for (int i = 0; i < initCount; i++) {
+      final offset = snakeData.targetDirection *
+          snakeData.segmentSpacing *
+          (i + 1);
+      final sPos = pos - offset;
+      snakeData.bodySegments.add(sPos.clone());
+      snakeData.path.add(sPos.clone());
+    }
+
+    snakeData.aiState = AiState.wandering;
     snakes.add(snakeData);
   }
 
-  void _growSnake(AiSnakeData snake, int amount) {
-    final oldCount = snake.segmentCount;
-    snake.segmentCount += amount;
-
-    for (int i = 0; i < amount; i++) {
-      snake.bodySegments.add(snake.bodySegments.last.clone());
+  void _growSnake(AiSnakeData s, int amt) {
+    final old = s.segmentCount;
+    s.segmentCount += amt;
+    for (int i = 0; i < amt; i++) {
+      s.bodySegments.add(s.bodySegments.last.clone());
     }
-
-    // Update size based on growth
-    if (snake.headRadius < snake.maxRadius) {
-      final growthBonus = (snake.segmentCount / 20).floor() - (oldCount / 20).floor();
-      if (growthBonus > 0) {
-        snake.headRadius = min(snake.headRadius + growthBonus, snake.maxRadius);
-        snake.bodyRadius = snake.headRadius - 1.0;
-      }
+    final oldB = (old / 25).floor();
+    final newB = (s.segmentCount / 25).floor();
+    if (newB > oldB) {
+      final inc = (newB - oldB).toDouble();
+      s.headRadius =
+          (s.headRadius + inc).clamp(s.minRadius, s.maxRadius);
+      s.bodyRadius = s.headRadius - 1.0;
     }
   }
 
-  void killSnakeAndScatterFood(AiSnakeData snake) {
-    // Scatter food from dead snake
-    for (int i = 0; i < snake.bodySegments.length; i += 2) {
-      final seg = snake.bodySegments[i];
-      foodManager.spawnFoodAt(seg);
+  void killSnakeAndScatterFood(AiSnakeData s) {
+    for (int i = 0; i < s.bodySegments.length; i += 2) {
+      foodManager.spawnFoodAt(s.bodySegments[i]);
     }
-    foodManager.spawnFoodAt(snake.position);
-
-    snakes.remove(snake);
+    foodManager.spawnFoodAt(s.position);
+    snakes.remove(s);
   }
 
   void spawnNewSnake() => _spawnSnake();
 
   List<Color> _getRandomSkin() {
-    final baseHue = _random.nextDouble() * 360;
-    return List.generate(6, (index) {
-      final hue = (baseHue + index * 15) % 360;
-      return HSVColor.fromAHSV(1.0, hue, 0.8, 0.9).toColor();
+    final b = _random.nextDouble() * 360;
+    return List.generate(6, (i) {
+      final h = (b + i * 15) % 360;
+      return HSVColor.fromAHSV(1, h, 0.8, 0.9).toColor();
     });
   }
 }
