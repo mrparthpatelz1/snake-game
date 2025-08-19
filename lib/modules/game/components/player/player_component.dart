@@ -14,8 +14,12 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
   final PlayerController playerController = Get.find<PlayerController>();
   final FoodManager foodManager;
   final ScoreService _scoreService = ScoreService();
+  Vector2 prevPosition;
+  Vector2 displayPosition;
 
-  PlayerComponent({required this.foodManager});
+  PlayerComponent({required this.foodManager}) : prevPosition = Vector2.zero(),
+        displayPosition = Vector2.zero(),
+        super();
 
   final Paint _eyePaint = Paint()..color = Colors.white;
   final Paint _pupilPaint = Paint()..color = Colors.black;
@@ -23,6 +27,7 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
   final List<Vector2> _path = [];
   final List<Vector2> bodySegments = [];
   double headAngle = 0.0;
+
 
   final Timer _shrinkTimer = Timer(0.1, repeat: true);
   late final int _minLength = playerController.initialSegmentCount;
@@ -49,6 +54,7 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     }
     _path.add(position.clone());
   }
+
 
   void _growSnake(int amount) {
     final oldSegmentCount = playerController.segmentCount.value;
@@ -178,6 +184,19 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     }
   }
 
+  void savePreviousPosition() {
+    prevPosition = position.clone();
+  }
+
+  void interpolatePosition(double alpha) {
+    displayPosition = prevPosition * (1 - alpha) + position * alpha;
+  }
+
+  void renderWithAlpha(Canvas canvas, double alpha) {
+    interpolatePosition(alpha);
+    render(canvas);
+  }
+
   Vector2 _getPointOnPathAtDistance(double distance) {
     final searchPath = [position, ..._path];
     double distanceTraveled = 0;
@@ -215,6 +234,11 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     _drawSegment(canvas, position, playerController.headRadius.value, playerController.skinColors.first, isHead: true);
     _drawEyes(canvas);
     canvas.restore();
+
+    final savedPosition = position;
+    position = displayPosition;
+    super.render(canvas);
+    position = savedPosition;
   }
 
   void _drawSegment(Canvas canvas, Vector2 segPos, double radius, Color color, {bool isHead = false}) {

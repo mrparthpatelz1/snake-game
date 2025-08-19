@@ -22,6 +22,10 @@ class FoodManager {
     }
   }
 
+  @override
+  void update(double dt) {
+  }
+
   void spawnFood() {
     final worldBounds = SlitherGame.worldBounds;
     final position = Vector2(

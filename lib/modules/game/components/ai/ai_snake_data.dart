@@ -9,6 +9,8 @@ enum AiState { wandering, chasing, fleeing, avoiding_boundary, seeking_center }
 
 class AiSnakeData {
   Vector2 position;
+  Vector2 prevPosition;      // Added to interpolate between frames
+  Vector2 displayPosition;   // Position used for smooth rendering
   double angle = 0.0;
   final List<Vector2> bodySegments = [];
   final List<Color> skinColors;
@@ -37,7 +39,18 @@ class AiSnakeData {
     required this.segmentCount,
     required this.minRadius,
     required this.maxRadius,
-  }) {
+  }) : prevPosition = position.clone(),
+        displayPosition = position.clone() {
     aiState = AiState.wandering;
+  }
+
+  // Call this at logic update start to save previous position
+  void savePreviousPosition() {
+    prevPosition = position.clone();
+  }
+
+  // Call this before rendering to interpolate display position smoothly
+  void interpolatePosition(double alpha) {
+    displayPosition = prevPosition * (1 - alpha) + position * alpha;
   }
 }

@@ -3,7 +3,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import 'ai_manager.dart';
 
-class AiPainter extends PositionComponent with HasGameRef {
+class AiPainter extends PositionComponent with HasGameReference {
   final AiManager aiManager;
   final CameraComponent cameraToFollow;
 
@@ -12,13 +12,14 @@ class AiPainter extends PositionComponent with HasGameRef {
 
   AiPainter({required this.aiManager, required this.cameraToFollow});
 
-  @override
-  void render(Canvas canvas) {
+  void renderWithAlpha(Canvas canvas, double alpha) {
     super.render(canvas);
     final visibleRect = cameraToFollow.visibleWorldRect;
 
     for (final snake in aiManager.snakes) {
       if (!visibleRect.overlaps(snake.boundingBox)) continue;
+
+      snake.interpolatePosition(alpha);
 
       // Body
       for (int i = snake.bodySegments.length - 1; i >= 0; i--) {
@@ -31,6 +32,12 @@ class AiPainter extends PositionComponent with HasGameRef {
       _drawSegment(canvas, snake.position, snake.headRadius, headColor);
       _drawEyes(canvas, snake.position, snake.angle, snake.headRadius);
     }
+    render(canvas);
+  }
+  @override
+  void render(Canvas canvas) {
+    // Optionally call renderWithAlpha with alpha = 1.0 (fully updated) for default behavior
+    renderWithAlpha(canvas, 1.0);
   }
 
   void _drawSegment(Canvas canvas, Vector2 position, double radius, Color color) {

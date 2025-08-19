@@ -129,6 +129,13 @@ class SlitherGame extends FlameGame with DragCallbacks {
     worldBounds.bottom - padding,
   );
 
+  double _accumulator = 0.0;
+  static const double _fixedStep = 1 / 40; // 30 updates per second
+
+  late AiPainter aiPainter;
+  late FoodPainter foodPainter;
+    final foodManager = FoodManager();
+
   @override
   Color backgroundColor() => Get.find<SettingsService>().backgroundColor;
 
@@ -136,7 +143,6 @@ class SlitherGame extends FlameGame with DragCallbacks {
   Future<void> onLoad() async {
     await super.onLoad();
 
-    final foodManager = FoodManager();
 
     player = PlayerComponent(foodManager: foodManager)..position = Vector2.zero();
 
@@ -192,16 +198,42 @@ class SlitherGame extends FlameGame with DragCallbacks {
   void update(double dt) {
     super.update(dt);
 
+
+    _accumulator += dt;
+
+    while (_accumulator >= _fixedStep) {
     if (joystick != null && joystick!.intensity > 0) {
       playerController.targetDirection = joystick!.delta.normalized();
     }
+      // Logic update tick
+      aiManager.snakes.forEach((snake) => snake.savePreviousPosition());
 
-    _updateCount++;
-    if (_updateCount % 3600 == 0) {
-      print('Game update running. Update count: $_updateCount');
+      aiManager.update(_fixedStep); // Your AI logic update
+
+      player.update(_fixedStep);
+      foodManager.update(_fixedStep);
+
+      _accumulator -= _fixedStep;
+
+      _updateCount++;
+      if (_updateCount % 3600 == 0) {
+        print('Game update running. Update count: $_updateCount');
+      }
+
+      _checkCollisions();
     }
+  }
 
-    _checkCollisions();
+  @override
+  void render(Canvas canvas) {
+    super.render(canvas);
+
+    final alpha = _accumulator / _fixedStep;
+
+    // Pass interpolation alpha to painters for smooth rendering
+    aiPainter.renderWithAlpha(canvas, alpha);
+    foodPainter.renderWithAlpha(canvas, alpha);
+    player.renderWithAlpha(canvas, alpha);
   }
 
   @override

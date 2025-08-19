@@ -21,6 +21,11 @@ class FoodPainter extends PositionComponent {
     _animT += dt;
   }
 
+  void renderWithAlpha(Canvas canvas, double alpha) {
+    // If you don't interpolate food (static positions), just call render normally:
+    render(canvas);
+  }
+
   @override
   void render(Canvas canvas) {
     super.render(canvas);

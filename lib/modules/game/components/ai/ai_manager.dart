@@ -11,7 +11,7 @@ import '../player/player_component.dart';
 import 'ai_snake_data.dart';
 
 class AiManager extends Component with HasGameReference<SlitherGame> {
-  final int numberOfSnakes = 70; // Reduced for performance
+  final int numberOfSnakes = 30; // Reduced for performance
   final Random _random = Random();
   final FoodManager foodManager;
   final PlayerComponent player;
@@ -22,7 +22,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
 
   // For batched updates
   int _updateIndex = 0;
-  static const int _batchSize = 10;
+  static const int _batchSize = 5;
 
   AiManager({required this.foodManager, required this.player});
 
@@ -65,6 +65,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
   }
 
   void _updateActiveSnake(AiSnakeData snake, double dt) {
+    snake.savePreviousPosition();
     _determineAiState(snake);
     Vector2 target = _calculateTargetDirection(snake);
     snake.targetDirection = target;
@@ -252,17 +253,19 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     return path.last.clone();
   }
 
-  void _checkFoodConsumption(AiSnakeData s) {
-    final eR = s.headRadius + 10;
+  void _checkFoodConsumption(AiSnakeData snake) {
+    final eatRadius = snake.headRadius + 10.0;
     final region = Rect.fromCircle(
-      center: s.position.toOffset(),
-      radius: eR + 100,
+      center: snake.position.toOffset(),
+      radius: eatRadius + 100,
     );
-    for (final food in foodManager.foodList.where(
-            (f) => region.contains(f.position.toOffset()))) {
-      if (s.position.distanceToSquared(food.position) <= eR * eR) {
+
+    final candidates = foodManager.foodList.where(
+            (food) => region.contains(food.position.toOffset()));
+    for (final food in candidates) {
+      if (snake.position.distanceToSquared(food.position) <= eatRadius * eatRadius) {
         foodManager.removeFood(food);
-        _growSnake(s, food.growth);
+        _growSnake(snake, food.growth);
         foodManager.spawnFood();
       }
     }
@@ -282,16 +285,20 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
   }
 
   void _initializeSpawnZones() {
-    const m = 200.0;
-    final b = SlitherGame.worldBounds.deflate(m);
-    final grid = (sqrt(numberOfSnakes)).ceil();
-    final w = b.width / grid, h = b.height / grid;
-    _spawnZones = List.generate(grid * grid, (i) {
-      final r = i ~/ grid, c = i % grid;
+    const margin = 200.0;
+    final bounds = SlitherGame.worldBounds.deflate(margin);
+    final gridSize = (sqrt(numberOfSnakes)).ceil();
+    final w = bounds.width / gridSize;
+    final h = bounds.height / gridSize;
+
+    _spawnZones = List.generate(gridSize * gridSize, (i) {
+      final row = i ~/ gridSize;
+      final col = i % gridSize;
       return Rect.fromLTWH(
-        b.left + c * w,
-        b.top + r * h,
-        w, h,
+        bounds.left + col * w,
+        bounds.top + row * h,
+        w,
+        h,
       );
     })..shuffle(_random);
   }
