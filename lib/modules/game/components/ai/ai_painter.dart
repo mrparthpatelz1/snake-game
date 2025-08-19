@@ -1,5 +1,3 @@
-// lib/app/modules/game/components/ai/ai_painter.dart
-
 import 'dart:math';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
@@ -20,19 +18,18 @@ class AiPainter extends PositionComponent with HasGameRef {
     final visibleRect = cameraToFollow.visibleWorldRect;
 
     for (final snake in aiManager.snakes) {
-      // Only draw the snake if its bounding box overlaps with the visible area.
-      if (visibleRect.overlaps(snake.boundingBox)) {
-        // Render body
-        for (int i = snake.bodySegments.length - 1; i >= 0; i--) {
-          final segmentPosition = snake.bodySegments[i];
-          final color = snake.skinColors[i % snake.skinColors.length];
-          _drawSegment(canvas, segmentPosition, snake.bodyRadius, color);
-        }
-        // Render head
-        final headColor = snake.skinColors.first;
-        _drawSegment(canvas, snake.position, snake.headRadius, headColor);
-        _drawEyes(canvas, snake.position, snake.angle, snake.headRadius);
+      if (!visibleRect.overlaps(snake.boundingBox)) continue;
+
+      // Body
+      for (int i = snake.bodySegments.length - 1; i >= 0; i--) {
+        final segPos = snake.bodySegments[i];
+        final color = snake.skinColors[i % snake.skinColors.length];
+        _drawSegment(canvas, segPos, snake.bodyRadius, color);
       }
+      // Head
+      final headColor = snake.skinColors.first;
+      _drawSegment(canvas, snake.position, snake.headRadius, headColor);
+      _drawEyes(canvas, snake.position, snake.angle, snake.headRadius);
     }
   }
 

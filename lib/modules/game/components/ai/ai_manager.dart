@@ -113,8 +113,6 @@
 
 // lib/app/modules/game/components/ai/ai_manager.dart
 
-// lib/app/modules/game/components/ai/ai_manager.dart
-
 import 'dart:math';
 import 'package:flame/components.dart';
 import 'package:flame/extensions.dart';
@@ -147,18 +145,15 @@ class AiManager extends Component with HasGameRef<SlitherGame> {
   @override
   void update(double dt) {
     super.update(dt);
-    // Get the camera's visible area, with a large buffer zone around it.
+
     final visibleRect = game.cameraComponent.visibleWorldRect.inflate(500);
 
     for (final snake in snakes) {
-      // 1. Update the snake's bounding box first.
       _updateBoundingBox(snake);
 
-      // 2. Only run the full, expensive update logic for snakes on or near the screen.
       if (visibleRect.overlaps(snake.boundingBox)) {
         _updateOnScreenSnake(snake, dt);
       } else {
-        // For snakes far off-screen, run a new, super-fast, simplified update.
         _updateOffScreenSnake(snake, dt);
       }
     }
@@ -176,41 +171,27 @@ class AiManager extends Component with HasGameRef<SlitherGame> {
       minY = min(minY, segment.y);
       maxY = max(maxY, segment.y);
     }
-    snake.boundingBox = Rect.fromLTRB(
-      minX - 16,
-      minY - 16,
-      maxX + 16,
-      maxY + 16,
-    );
+    snake.boundingBox = Rect.fromLTRB(minX - 16, minY - 16, maxX + 16, maxY + 16);
   }
 
-  // This is the new, super-fast update logic for off-screen snakes.
   void _updateOffScreenSnake(AiSnakeData snake, double dt) {
-    // 1. Calculate the head's movement vector.
     final direction = Vector2(cos(snake.angle), sin(snake.angle));
     final moveVector = direction * snake.speed * dt;
     snake.position.add(moveVector);
-
-    // 2. Move all body segments by the exact same amount.
-    // This is a simple "teleport" that is extremely fast and keeps the body together.
     for (final segment in snake.bodySegments) {
       segment.add(moveVector);
     }
-
-    // 3. We still clamp the head's position to keep it in the world.
     snake.position.clamp(
       SlitherGame.playArea.topLeft.toVector2(),
       SlitherGame.playArea.bottomRight.toVector2(),
     );
   }
 
-  // This is the full, expensive update logic for on-screen snakes.
   void _updateOnScreenSnake(AiSnakeData snake, double dt) {
     double visionRadius = 600.0;
     double rotationSpeed = 3 * pi;
     const wallAvoidanceMargin = 300.0;
 
-    // Difficulty tuning
     switch (snake.difficulty) {
       case AiDifficulty.easy:
         visionRadius *= 0.7;
@@ -224,20 +205,19 @@ class AiManager extends Component with HasGameRef<SlitherGame> {
         break;
     }
 
-    // --- AI Decision Making ---
     final playArea = SlitherGame.playArea;
     bool isNearWall = false;
     if (snake.position.x < playArea.left + wallAvoidanceMargin) {
-      snake.targetDirection = Vector2(1, 0); // Go right
+      snake.targetDirection = Vector2(1, 0);
       isNearWall = true;
     } else if (snake.position.x > playArea.right - wallAvoidanceMargin) {
-      snake.targetDirection = Vector2(-1, 0); // Go left
+      snake.targetDirection = Vector2(-1, 0);
       isNearWall = true;
     } else if (snake.position.y < playArea.top + wallAvoidanceMargin) {
-      snake.targetDirection = Vector2(0, 1); // Go down
+      snake.targetDirection = Vector2(0, 1);
       isNearWall = true;
     } else if (snake.position.y > playArea.bottom - wallAvoidanceMargin) {
-      snake.targetDirection = Vector2(0, -1); // Go up
+      snake.targetDirection = Vector2(0, -1);
       isNearWall = true;
     }
 
@@ -245,55 +225,42 @@ class AiManager extends Component with HasGameRef<SlitherGame> {
       final distanceToPlayer = snake.position.distanceTo(player.position);
       if (distanceToPlayer < visionRadius) {
         if (snake.bodySegments.length > player.bodySegments.length) {
-          snake.targetDirection = (player.position - snake.position)
-              .normalized();
+          snake.targetDirection = (player.position - snake.position).normalized();
         } else {
-          snake.targetDirection = (snake.position - player.position)
-              .normalized();
+          snake.targetDirection = (snake.position - player.position).normalized();
         }
-      } else {
-        if (_random.nextDouble() < 0.02) {
-          snake.targetDirection = Vector2.random(_random)..normalize();
-        }
+      } else if (_random.nextDouble() < 0.02) {
+        snake.targetDirection = Vector2.random(_random)..normalize();
       }
     }
 
-    // --- Head Movement ---
     final targetAngle = snake.targetDirection.screenAngle();
     final angleDiff = _getAngleDifference(snake.angle, targetAngle);
-    final rotationAmount = rotationSpeed * dt;
-    if (angleDiff.abs() < rotationAmount) {
-      snake.angle = targetAngle;
-    } else {
-      snake.angle += rotationAmount * angleDiff.sign;
-    }
+    final rotationAmount = (3 * pi) * dt;
+    snake.angle = (angleDiff.abs() < rotationAmount)
+        ? targetAngle
+        : snake.angle + rotationAmount * angleDiff.sign;
+
     final direction = Vector2(cos(snake.angle), sin(snake.angle));
     snake.position.add(direction * snake.speed * dt);
-    snake.position.clamp(
-      playArea.topLeft.toVector2(),
-      playArea.bottomRight.toVector2(),
-    );
+    snake.position.clamp(playArea.topLeft.toVector2(), playArea.bottomRight.toVector2());
 
-    // --- Body Following ---
-    if (snake.path.isEmpty ||
-        snake.position.distanceTo(snake.path.first) > 3.0) {
+    if (snake.path.isEmpty || snake.position.distanceTo(snake.path.first) > 3.0) {
       snake.path.insert(0, snake.position.clone());
     }
     for (int i = 0; i < snake.bodySegments.length; i++) {
       final totalDistance = (i + 1) * snake.segmentSpacing;
-      final pointOnPath = _getPointOnPathAtDistance(snake, totalDistance);
-      snake.bodySegments[i].setFrom(pointOnPath);
+      snake.bodySegments[i].setFrom(_getPointOnPathAtDistance(snake, totalDistance));
     }
     final maxPathLength = (snake.bodySegments.length + 5) * 20;
     if (snake.path.length > maxPathLength) {
       snake.path.removeRange(maxPathLength, snake.path.length);
     }
 
-    // --- Collision Detection ---
-    final eatDistance = (snake.headRadius * snake.headRadius) + 500;
-    final List<FoodData> eatenFood = [];
+    final eatDistanceSq = (snake.headRadius * snake.headRadius) + 500;
+    final eatenFood = <FoodData>[];
     for (final food in foodManager.foodList) {
-      if (snake.position.distanceToSquared(food.position) < eatDistance) {
+      if (snake.position.distanceToSquared(food.position) < eatDistanceSq) {
         eatenFood.add(food);
       }
     }
@@ -312,6 +279,7 @@ class AiManager extends Component with HasGameRef<SlitherGame> {
     );
     final initialDirection = Vector2.random(_random)..normalize();
     final double headRadius = 12.0 + _random.nextDouble() * 8.0;
+
     final snakeData = AiSnakeData(
       position: position,
       skinColors: _getRandomSkin(),
@@ -325,17 +293,11 @@ class AiManager extends Component with HasGameRef<SlitherGame> {
       maxRadius: 40.0,
     );
 
-    // Assign difficulty distribution: 85% easy, 13% medium, 2% hard
     final r = _random.nextDouble();
-    if (r < 0.85) {
-      snakeData.difficulty = AiDifficulty.easy;
-    } else if (r < 0.98) {
-      snakeData.difficulty = AiDifficulty.medium;
-    } else {
-      snakeData.difficulty = AiDifficulty.hard;
-    }
+    snakeData.difficulty = r < 0.85
+        ? AiDifficulty.easy
+        : (r < 0.98 ? AiDifficulty.medium : AiDifficulty.hard);
 
-    // Adjust stats per difficulty
     switch (snakeData.difficulty) {
       case AiDifficulty.easy:
         snakeData.speed *= 0.85;
@@ -348,8 +310,7 @@ class AiManager extends Component with HasGameRef<SlitherGame> {
         break;
     }
     for (int i = 0; i < snakeData.segmentCount; i++) {
-      final segmentPos =
-          position - Vector2(snakeData.segmentSpacing * (i + 1), 0);
+      final segmentPos = position - Vector2(snakeData.segmentSpacing * (i + 1), 0);
       snakeData.bodySegments.add(segmentPos);
       snakeData.path.add(segmentPos);
     }
@@ -357,51 +318,71 @@ class AiManager extends Component with HasGameRef<SlitherGame> {
   }
 
   void _growSnake(AiSnakeData snake, int amount) {
-    final oldSegmentCount = snake.segmentCount;
+    final oldCount = snake.segmentCount;
     snake.segmentCount += amount;
     for (int i = 0; i < amount; i++) {
       snake.bodySegments.add(snake.bodySegments.last.clone());
     }
     if (snake.headRadius < snake.maxRadius) {
-      final oldRadiusBonus = (oldSegmentCount / 25).floor();
-      final newRadiusBonus = (snake.segmentCount / 25).floor();
-      if (newRadiusBonus > oldRadiusBonus) {
-        final radiusIncrease = (newRadiusBonus - oldRadiusBonus).toDouble();
-        double newRadius = snake.headRadius + radiusIncrease;
-        if (newRadius > snake.maxRadius) {
-          newRadius = snake.maxRadius;
-        }
-        snake.headRadius = newRadius;
-        snake.bodyRadius = newRadius - 1.0;
+      final oldBonus = (oldCount / 25).floor();
+      final newBonus = (snake.segmentCount / 25).floor();
+      if (newBonus > oldBonus) {
+        final inc = (newBonus - oldBonus).toDouble();
+        snake.headRadius = (snake.headRadius + inc).clamp(snake.minRadius, snake.maxRadius);
+        snake.bodyRadius = snake.headRadius - 1.0;
       }
     }
   }
 
   void killSnakeAndScatterFood(AiSnakeData snake) {
+    // for (final seg in snake.bodySegments) {
+    //   foodManager.spawnFoodAt(seg);
+    // }
+    // foodManager.spawnFoodAt(snake.position);
+    // snakes.remove(snake);
+    final random = Random();
+
     for (final seg in snake.bodySegments) {
-      foodManager.spawnFoodAt(seg);
+      // Each segment drops 2–4 pellets
+      int pelletCount = 2 + random.nextInt(3);
+
+      for (int i = 0; i < pelletCount; i++) {
+        // Random scatter radius (based on snake body size)
+        double radius = snake.bodyRadius * (0.5 + random.nextDouble());
+
+        // Random angle around the segment
+        double angle = random.nextDouble() * 2 * pi;
+
+        final offset = Vector2(
+          seg.x + cos(angle) * radius,
+          seg.y + sin(angle) * radius,
+        );
+
+        foodManager.spawnFoodAt(offset);
+      }
     }
+
+    // Extra food at snake head position
     foodManager.spawnFoodAt(snake.position);
+
     snakes.remove(snake);
   }
 
-  void spawnNewSnake() {
-    _spawnSnake();
-  }
+  void spawnNewSnake() => _spawnSnake();
 
   Vector2 _getPointOnPathAtDistance(AiSnakeData snake, double distance) {
     final searchPath = [snake.position, ...snake.path];
-    double distanceTraveled = 0;
+    double d = 0;
     for (int i = 0; i < searchPath.length - 1; i++) {
       final p1 = searchPath[i];
       final p2 = searchPath[i + 1];
-      final segmentLength = p1.distanceTo(p2);
-      if (distanceTraveled + segmentLength >= distance) {
-        final neededDist = distance - distanceTraveled;
-        final direction = (p2 - p1).normalized();
-        return p1 + direction * neededDist;
+      final segLen = p1.distanceTo(p2);
+      if (d + segLen >= distance) {
+        final needed = distance - d;
+        final dir = (p2 - p1).normalized();
+        return p1 + dir * needed;
       }
-      distanceTraveled += segmentLength;
+      d += segLen;
     }
     return searchPath.last;
   }
@@ -409,13 +390,12 @@ class AiManager extends Component with HasGameRef<SlitherGame> {
   List<Color> _getRandomSkin() {
     return List.generate(
       6,
-      (index) =>
-          Color((_random.nextDouble() * 0xFFFFFF).toInt()).withOpacity(1.0),
+          (index) => Color((_random.nextDouble() * 0xFFFFFF).toInt()).withOpacity(1.0),
     );
   }
 
-  double _getAngleDifference(double angle1, double angle2) {
-    var diff = (angle2 - angle1 + pi) % (2 * pi) - pi;
+  double _getAngleDifference(double a, double b) {
+    var diff = (b - a + pi) % (2 * pi) - pi;
     return diff < -pi ? diff + 2 * pi : diff;
   }
 }

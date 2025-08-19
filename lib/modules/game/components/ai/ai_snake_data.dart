@@ -1,5 +1,3 @@
-// lib/app/modules/game/components/ai/ai_snake_data.dart
-
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import 'ai_manager.dart';
