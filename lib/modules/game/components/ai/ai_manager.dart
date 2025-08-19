@@ -364,10 +364,28 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
   }
 
   void killSnakeAndScatterFood(AiSnakeData s) {
-    for (int i = 0; i < s.bodySegments.length; i += 2) {
-      foodManager.spawnFoodAt(s.bodySegments[i]);
+
+    for (final seg in s.bodySegments) {
+      // Each segment drops 2–4 pellets
+      int pelletCount = 2 + _random.nextInt(3);
+
+      for (int i = 0; i < pelletCount; i++) {
+        // Random scatter radius (based on snake body size)
+        double radius = s.bodyRadius * (0.5 + _random.nextDouble());
+
+        // Random angle around the segment
+        double angle = _random.nextDouble() * 2 * pi;
+
+        final offset = Vector2(
+          seg.x + cos(angle) * radius,
+          seg.y + sin(angle) * radius,
+        );
+
+        foodManager.spawnFoodAt(offset);
+      }
     }
     foodManager.spawnFoodAt(s.position);
+
     snakes.remove(s);
   }
 
