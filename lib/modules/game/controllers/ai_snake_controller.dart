@@ -74,8 +74,8 @@ class AiSnakeController {
     }
   }
 
-  FoodData? _findClosestFood() {
-    FoodData? closestFood;
+  FoodModel? _findClosestFood() {
+    FoodModel? closestFood;
     double closestDistance = double.infinity;
 
     for (final food in foodManager.foodList) {

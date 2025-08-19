@@ -106,7 +106,7 @@ class AiSnakeComponent extends PositionComponent {
 
     // --- FAST, MANUAL COLLISION DETECTION ---
     final eatDistance = (headRadius * headRadius) + 500;
-    final List<FoodData> eatenFood = [];
+    final List<FoodModel> eatenFood = [];
 
     for (final food in foodManager.foodList) {
       if (position.distanceToSquared(food.position) < eatDistance) {

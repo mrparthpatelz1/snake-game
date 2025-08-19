@@ -9,7 +9,7 @@ import '../../views/game_screen.dart';
 class FoodManager {
   final Random _random = Random();
   final int foodCount = 20000;
-  final List<FoodData> foodList = [];
+  final List<FoodModel> foodList = [];
 
   final List<Color> _foodColors = [
     Colors.redAccent, Colors.greenAccent, Colors.blueAccent,
@@ -49,7 +49,7 @@ class FoodManager {
     }
     // --- END OF FIX ---
 
-    foodList.add(FoodData(
+    foodList.add(FoodModel(
       position: position,
       color: color,
       radius: radius,
@@ -62,7 +62,7 @@ class FoodManager {
     const radius = 6.0;
     const growth = 1;
 
-    foodList.add(FoodData(
+    foodList.add(FoodModel(
       position: position,
       color: color,
       radius: radius,
@@ -70,7 +70,7 @@ class FoodManager {
     ));
   }
 
-  void removeFood(FoodData food) {
+  void removeFood(FoodModel food) {
     foodList.remove(food);
   }
 }

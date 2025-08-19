@@ -165,7 +165,7 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
 
     // Eat food
     final eatDistSq = (playerController.headRadius.value * playerController.headRadius.value) + 500;
-    final eatenFood = <FoodData>[];
+    final eatenFood = <FoodModel>[];
     for (final food in foodManager.foodList) {
       if (position.distanceToSquared(food.position) < eatDistSq) {
         eatenFood.add(food);

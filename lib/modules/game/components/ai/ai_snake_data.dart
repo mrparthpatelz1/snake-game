@@ -1,6 +1,10 @@
+// lib/modules/game/components/ai/ai_snake_data.dart
+
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
-import 'ai_manager.dart';
+
+enum AiDifficulty { easy, medium, hard }
+enum AiState { wandering, chasing, fleeing, avoiding_boundary, seeking_center }
 
 class AiSnakeData {
   Vector2 position;
@@ -12,8 +16,6 @@ class AiSnakeData {
 
   Rect boundingBox = Rect.zero;
 
-  String gridKey = '';
-
   double headRadius;
   double bodyRadius;
   final double segmentSpacing;
@@ -21,7 +23,9 @@ class AiSnakeData {
   int segmentCount;
   final double minRadius;
   double maxRadius;
+
   late AiDifficulty difficulty;
+  late AiState aiState;
 
   AiSnakeData({
     required this.position,

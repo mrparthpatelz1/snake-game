@@ -4,13 +4,13 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
 // This is NOT a component. It's just a simple class to hold data.
-class FoodData {
+class FoodModel {
   final Vector2 position;
   final Color color;
   final double radius;
   final int growth;
 
-  FoodData({
+  FoodModel({
     required this.position,
     required this.color,
     required this.radius,
