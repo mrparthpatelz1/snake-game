@@ -1,89 +1,3 @@
-// // lib/app/modules/game/views/game_screen.dart
-//
-// import 'package:flame/game.dart';
-// import 'package:flame/components.dart';
-// import 'package:flame/events.dart';
-// import 'package:flutter/material.dart';
-// import 'package:get/get.dart';
-// import '../components/player/player_component.dart';
-// import '../controllers/player_controller.dart';
-//
-// class SlitherGame extends FlameGame with DragCallbacks {
-//   final PlayerController playerController = Get.find<PlayerController>();
-//   JoystickComponent? joystick;
-//
-//   @override
-//   Future<void> onLoad() async {
-//     await super.onLoad();
-//     final player = PlayerComponent();
-//     add(player);
-//
-//     // This is the standard and most reliable way to make the camera follow.
-//     camera.follow(player);
-//   }
-//
-//   @override
-//   void update(double dt) {
-//     super.update(dt);
-//     // On every frame, check if the joystick exists and is being used.
-//     if (joystick != null && joystick!.intensity > 0) {
-//       // If so, update the player's direction using the joystick's `delta`.
-//       playerController.targetDirection = joystick!.delta.normalized();
-//     }
-//   }
-//
-//   @override
-//   void onDragStart(DragStartEvent event) {
-//     if (joystick == null) {
-//       joystick = JoystickComponent(
-//         knob: CircleComponent(
-//           radius: 25,
-//           paint: Paint()..color = Colors.white.withValues(alpha: 0.5),
-//         ),
-//         background: CircleComponent(
-//           radius: 70,
-//           paint: Paint()..color = Colors.grey.withValues(alpha: 0.3),
-//         ),
-//         position: event.canvasPosition,
-//       );
-//       camera.viewport.add(joystick!);
-//     }
-//     super.onDragStart(event);
-//   }
-//
-//   @override
-//   void onDragEnd(DragEndEvent event) {
-//     if (joystick != null) {
-//       joystick!.removeFromParent();
-//       joystick = null;
-//     }
-//     super.onDragEnd(event);
-//   }
-//
-//   @override
-//   void onDragUpdate(DragUpdateEvent event) {
-//     joystick?.onDragUpdate(event);
-//     super.onDragUpdate(event);
-//   }
-// }
-//
-// // The GameScreen widget remains unchanged.
-// class GameScreen extends StatelessWidget {
-//   const GameScreen({super.key});
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       body: GameWidget(
-//         game: SlitherGame(),
-//       ),
-//     );
-//   }
-// }
-
-// lib/app/modules/game/views/game_screen.dart
-
-import 'dart:math';
 import 'package:flame/experimental.dart';
 import 'package:flame/game.dart';
 import 'package:flame/components.dart';
@@ -109,15 +23,13 @@ class SlitherGame extends FlameGame with DragCallbacks {
   final PlayerController playerController = Get.find<PlayerController>();
 
   // Keep explicit references so we don’t rely on querying root children.
+  @override
   late final World world;
   late final AiManager aiManager;
   late final PlayerComponent player;
   late final CameraComponent cameraComponent;
 
   JoystickComponent? joystick;
-  static int _frameCount = 0;
-  static int _collisionCallCount = 0;
-  static int _updateCount = 0;
 
   static final worldBounds = Rect.fromLTRB(-10800, -10800, 10800, 10800);
 
@@ -134,7 +46,7 @@ class SlitherGame extends FlameGame with DragCallbacks {
 
   late AiPainter aiPainter;
   late FoodPainter foodPainter;
-    final foodManager = FoodManager();
+  final foodManager = FoodManager();
 
   @override
   Color backgroundColor() => Get.find<SettingsService>().backgroundColor;
@@ -202,11 +114,13 @@ class SlitherGame extends FlameGame with DragCallbacks {
     _accumulator += dt;
 
     while (_accumulator >= _fixedStep) {
-    if (joystick != null && joystick!.intensity > 0) {
-      playerController.targetDirection = joystick!.delta.normalized();
-    }
+      if (joystick != null && joystick!.intensity > 0) {
+        playerController.targetDirection = joystick!.delta.normalized();
+      }
       // Logic update tick
-      aiManager.snakes.forEach((snake) => snake.savePreviousPosition());
+      for (var snake in aiManager.snakes) {
+        snake.savePreviousPosition();
+      }
 
       aiManager.update(_fixedStep); // Your AI logic update
 
@@ -214,11 +128,6 @@ class SlitherGame extends FlameGame with DragCallbacks {
       foodManager.update(_fixedStep);
 
       _accumulator -= _fixedStep;
-
-      _updateCount++;
-      if (_updateCount % 3600 == 0) {
-        print('Game update running. Update count: $_updateCount');
-      }
 
       _checkCollisions();
     }
@@ -242,11 +151,11 @@ class SlitherGame extends FlameGame with DragCallbacks {
       joystick = JoystickComponent(
         knob: CircleComponent(
           radius: 20,
-          paint: Paint()..color = Colors.white.withOpacity(0.5),
+          paint: Paint()..color = Colors.white.withAlpha(128),
         ),
         background: CircleComponent(
           radius: 55,
-          paint: Paint()..color = Colors.grey.withOpacity(0.3),
+          paint: Paint()..color = Colors.grey.withAlpha(77),
         ),
         position: event.canvasPosition,
       );
@@ -257,7 +166,7 @@ class SlitherGame extends FlameGame with DragCallbacks {
 
   @override
   void onDragEnd(DragEndEvent event) {
-    joystick?..removeFromParent();
+    joystick?.removeFromParent();
     joystick = null;
     super.onDragEnd(event);
   }
@@ -269,14 +178,8 @@ class SlitherGame extends FlameGame with DragCallbacks {
   }
 
   void _checkCollisions() {
-    _collisionCallCount++;
-    if (_collisionCallCount % 120 == 0) {
-      print('_checkCollisions called $_collisionCallCount times');
-    }
-
     // Early out if we somehow don’t have an AiManager (shouldn’t happen now).
     if (!aiManager.isMounted) {
-      print('AiManager not mounted yet; skipping collisions.');
       return;
     }
 
@@ -284,31 +187,14 @@ class SlitherGame extends FlameGame with DragCallbacks {
     final playerHeadRadius = playerController.headRadius.value;
     final playerBodyRadius = playerController.bodyRadius.value;
 
-    _frameCount++;
-    if (_frameCount % 60 == 0) {
-      print(
-        'Collision check: snakes=${aiManager.snakes.length} '
-            'player=(${playerHeadPos.x.toStringAsFixed(1)}, ${playerHeadPos.y.toStringAsFixed(1)}) '
-            'rHead=$playerHeadRadius',
-      );
-    }
-
     // Cull to only snakes close enough to matter.
     final visibleRect = cameraComponent.visibleWorldRect.inflate(300);
 
     final List<AiSnakeData> snakesToKill = [];
 
-    int shown = 0;
     for (final snake in aiManager.snakes) {
       // Skip far snakes fast using their bounding boxes.
       if (!visibleRect.overlaps(snake.boundingBox)) continue;
-
-      if (shown < 3 && _frameCount % 60 == 0) {
-        print(
-          'AI Snake ${++shown} pos=(${snake.position.x.toStringAsFixed(1)}, ${snake.position.y.toStringAsFixed(1)}) '
-              'rHead=${snake.headRadius}',
-        );
-      }
 
       // 1) Head-to-head
       final headToHeadDistance = playerHeadPos.distanceTo(snake.position);
@@ -316,14 +202,11 @@ class SlitherGame extends FlameGame with DragCallbacks {
 
       if (headToHeadDistance <= requiredHeadDistance) {
         if (playerHeadRadius > snake.headRadius) {
-          print('Player wins H2H: $playerHeadRadius vs ${snake.headRadius}');
           snakesToKill.add(snake);
         } else if (playerHeadRadius < snake.headRadius) {
-          print('AI wins H2H: $playerHeadRadius vs ${snake.headRadius}');
           player.die();
           return;
         } else {
-          print('Equal H2H — both die at r=$playerHeadRadius');
           snakesToKill.add(snake);
           player.die();
           return;
@@ -337,7 +220,6 @@ class SlitherGame extends FlameGame with DragCallbacks {
         final bodyDistance = playerHeadPos.distanceTo(seg);
         final requiredBodyDistance = playerHeadRadius + snake.bodyRadius;
         if (bodyDistance <= requiredBodyDistance) {
-          print('Player head hit AI body[$i]: d=$bodyDistance <= $requiredBodyDistance');
           player.die();
           return;
         }
@@ -349,7 +231,6 @@ class SlitherGame extends FlameGame with DragCallbacks {
         final bodyDistance = snake.position.distanceTo(seg);
         final requiredBodyDistance = snake.headRadius + playerBodyRadius;
         if (bodyDistance <= requiredBodyDistance) {
-          print('AI head hit player body[$i]: d=$bodyDistance <= $requiredBodyDistance (AI dies)');
           snakesToKill.add(snake);
           break;
         }
