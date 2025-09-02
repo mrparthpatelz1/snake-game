@@ -1,64 +1,50 @@
-import 'dart:math';
 import 'package:flame/components.dart';
+import 'package:flame/extensions.dart';
 import 'package:flutter/material.dart';
+
+import '../../views/game_screen.dart';
+import 'ai_snake_data.dart';
 import 'ai_manager.dart';
 
-class AiPainter extends PositionComponent with HasGameReference {
+class AiPainter extends Component with HasGameReference<SlitherGame> {
   final AiManager aiManager;
-  final CameraComponent cameraToFollow;
 
-  final Paint _eyePaint = Paint()..color = Colors.white;
-  final Paint _pupilPaint = Paint()..color = Colors.black;
+  AiPainter({required this.aiManager});
 
-  AiPainter({required this.aiManager, required this.cameraToFollow});
-
-  void renderWithAlpha(Canvas canvas, double alpha) {
-    super.render(canvas);
-    final visibleRect = cameraToFollow.visibleWorldRect;
-
-    for (final snake in aiManager.snakes) {
-      if (!visibleRect.overlaps(snake.boundingBox)) continue;
-
-      snake.interpolatePosition(alpha);
-
-      // Body
-      for (int i = snake.bodySegments.length - 1; i >= 0; i--) {
-        final segPos = snake.bodySegments[i];
-        final color = snake.skinColors[i % snake.skinColors.length];
-        _drawSegment(canvas, segPos, snake.bodyRadius, color);
-      }
-      // Head
-      final headColor = snake.skinColors.first;
-      _drawSegment(canvas, snake.position, snake.headRadius, headColor);
-      _drawEyes(canvas, snake.position, snake.angle, snake.headRadius);
-    }
-    render(canvas);
-  }
   @override
   void render(Canvas canvas) {
-    // Optionally call renderWithAlpha with alpha = 1.0 (fully updated) for default behavior
-    renderWithAlpha(canvas, 1.0);
-  }
+    super.render(canvas);
 
-  void _drawSegment(Canvas canvas, Vector2 position, double radius, Color color) {
-    final paint = Paint()
-      ..shader = RadialGradient(
-        colors: [color, color.withOpacity(0.5)],
-      ).createShader(Rect.fromCircle(center: position.toOffset(), radius: radius));
-    canvas.drawCircle(position.toOffset(), radius, paint);
-  }
+    final view = game.cameraComponent.visibleWorldRect;
+    final margin = 300.0;
+    final drawRect = view.inflate(margin);
 
-  void _drawEyes(Canvas canvas, Vector2 headPosition, double headAngle, double headRadius) {
-    final eyeRadius = headRadius * 0.25;
-    final pupilRadius = eyeRadius * 0.5;
-    final eyeDistance = headRadius * 0.6;
+    int drawn = 0;
+    final headPaint = Paint();
 
-    final rightEyePos = headPosition + Vector2(cos(headAngle + pi / 4) * eyeDistance, sin(headAngle + pi / 4) * eyeDistance);
-    canvas.drawCircle(rightEyePos.toOffset(), eyeRadius, _eyePaint);
-    canvas.drawCircle(rightEyePos.toOffset(), pupilRadius, _pupilPaint);
+    for (final snake in aiManager.snakes) {
+      if (snake.isDead) continue;
+      if (!drawRect.overlaps(snake.boundingBox)) continue;
 
-    final leftEyePos = headPosition + Vector2(cos(headAngle - pi / 4) * eyeDistance, sin(headAngle - pi / 4) * eyeDistance);
-    canvas.drawCircle(leftEyePos.toOffset(), eyeRadius, _eyePaint);
-    canvas.drawCircle(leftEyePos.toOffset(), pupilRadius, _pupilPaint);
+      drawn++;
+
+      // Paint cycling by segment index
+      for (int i = 0; i < snake.segmentCount; i++) {
+        Offset segPos;
+
+        if (i == 0) {
+          // Always draw head from snake.position
+          segPos = snake.position.toOffset();
+          headPaint.color = snake.skinColors[0];
+          canvas.drawCircle(segPos, snake.headRadius, headPaint);
+        } else if (i - 1 < snake.bodySegments.length) {
+          segPos = snake.bodySegments[i - 1].toOffset();
+          headPaint.color = snake.skinColors[i % snake.skinColors.length];
+          canvas.drawCircle(segPos, snake.bodyRadius, headPaint);
+        }
+      }
+    }
+
+    debugPrint("Rendering snakes: $drawn");
   }
 }

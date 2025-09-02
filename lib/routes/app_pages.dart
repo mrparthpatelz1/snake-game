@@ -1,4 +1,6 @@
 import 'package:get/get.dart';
+import '../modules/game/customization/bindings/customization_binding.dart';
+import '../modules/game/customization/customization_screen.dart';
 import '../modules/game/game_bindings.dart';
 import '../modules/game/home/home_bindings.dart';
 import '../modules/game/home/home_screen.dart';
@@ -21,6 +23,11 @@ class AppPages {
       name: Paths.GAME,
       page: () => const GameScreen(),
       binding: GameBinding(), // Binds the necessary controllers for the GameScreen.
+    ),
+    GetPage(
+      name: Paths.CUSTOMIZATION,
+      page: () => const CustomizationScreen(),
+      binding: CustomizationBinding(),
     ),
   ];
 }

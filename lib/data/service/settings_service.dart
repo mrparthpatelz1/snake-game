@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart'; // You will need to add this import for RxInt
 import 'package:get_storage/get_storage.dart';
 
 class SettingsService {
   final GetStorage _box = GetStorage();
 
+  // --- KEYS FOR STORAGE ---
   static const String _skinKey = 'selectedSkinIndex';
   static const String _bgColorKey = 'backgroundColorHex';
+  // --- ADD THIS LINE ---
+  static const String _headKey = 'selectedHeadIndex';
 
-  // A curated set of skins (palettes). Each palette is 6 colors head->tail.
-  final List<List<Color>> _skins = [
+  // --- SKIN SETTINGS ---
+  final List<List<Color>> allSkins = [ // Made this public for the customization screen
     [
       Colors.blue.shade400,
       Colors.lightGreen.shade400,
@@ -51,18 +55,50 @@ class SettingsService {
     ],
   ];
 
-  int get selectedSkinIndex => _box.read(_skinKey) ?? 0;
-  void setSelectedSkinIndex(int index) => _box.write(_skinKey, index);
+  final RxInt selectedSkinIndex = 0.obs;
 
-  List<Color> get selectedSkin {
-    final idx = selectedSkinIndex;
-    if (idx < 0 || idx >= _skins.length) return _skins.first;
-    return _skins[idx];
+  void setSelectedSkinIndex(int index) {
+    if (index >= 0 && index < allSkins.length) {
+      selectedSkinIndex.value = index;
+      _box.write(_skinKey, index);
+    }
   }
 
-  List<List<Color>> get allSkins => _skins;
+  List<Color> get selectedSkin {
+    final idx = selectedSkinIndex.value;
+    if (idx < 0 || idx >= allSkins.length) return allSkins.first;
+    return allSkins[idx];
+  }
 
-  // Background color selection; default matches current game color.
+  // --- HEAD SETTINGS (NEW) ---
+
+  final List<String> allHeads = [
+    '01.png',
+    '02.png',
+    '03.png',
+    '04.png',
+    '05.png',
+    '06.png',
+    '07.png',
+    '08.png',
+  ];
+
+  final RxInt selectedHeadIndex = 0.obs;
+
+  void setSelectedHeadIndex(int index) {
+    if (index >= 0 && index < allHeads.length) {
+      selectedHeadIndex.value = index;
+      _box.write(_headKey, index);
+    }
+  }
+
+  String get selectedHead {
+    final idx = selectedHeadIndex.value;
+    if (idx < 0 || idx >= allHeads.length) return allHeads.first;
+    return allHeads[idx];
+  }
+
+  // --- BACKGROUND SETTINGS ---
   Color get backgroundColor {
     final hex = _box.read(_bgColorKey);
     if (hex is int) return Color(hex);
@@ -72,5 +108,14 @@ class SettingsService {
   void setBackgroundColor(Color color) {
     _box.write(_bgColorKey, color.value);
   }
-}
 
+  // --- INITIALIZATION ---
+  // A method to load all settings from storage when the app starts.
+  Future<void> init() async {
+    // Load saved skin index
+    selectedSkinIndex.value = _box.read(_skinKey) ?? 0;
+
+    // Load saved head index
+    selectedHeadIndex.value = _box.read(_headKey) ?? 0;
+  }
+}

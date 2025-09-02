@@ -4,73 +4,176 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../data/service/score_service.dart';
 import '../../../routes/app_routes.dart';
-import '../components/ui/menu_button.dart';
 import 'game_screen.dart';
+import '../controllers/player_controller.dart';
 
 class GameOverMenu extends StatelessWidget {
   final SlitherGame game;
+  final PlayerController playerController;
   final ScoreService _scoreService = ScoreService();
 
-  GameOverMenu({super.key, required this.game});
+  GameOverMenu({super.key, required this.game,required this.playerController});
 
   @override
   Widget build(BuildContext context) {
-    final score = game.playerController.segmentCount.value;
+  // final PlayerController _playerController = Get.find<PlayerController>();
+    // Save the final scores and retrieve the high scores
+    final currentScore = playerController.foodScore.value;
+    final currentKills = playerController.kills.value;
+    _scoreService.saveHighScore(currentScore);
+    _scoreService.saveHighKills(currentKills);
     final highScore = _scoreService.getHighScore();
-    final kills = game.playerController.kills.value;
     final highKills = _scoreService.getHighKills();
 
-    return Center(
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          width: 300,
-          padding: const EdgeInsets.all(12.0),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E1E1E),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.grey.shade700, width: 2),
+    return Scaffold(
+      backgroundColor: Colors.black.withOpacity(0.6),
+      body: Stack(
+        children: [
+          // --- HOME BUTTON (Top Left) ---
+          Positioned(
+            top: 40,
+            left: 20,
+            child: GestureDetector(
+              onTap: () {
+                game.resumeEngine(); // Always resume engine before navigating away
+                Get.offAllNamed(Routes.HOME);
+              },
+              child: Image.asset('assets/images/home Btn.png', width: 60),
+            ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'GAME OVER',
-                style: TextStyle(fontSize: 24, color: Colors.redAccent),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Score: $score',
-                style: const TextStyle(fontSize: 20, color: Colors.white),
-              ),
-              Text(
-                'High Score: $highScore',
-                style: const TextStyle(fontSize: 20, color: Colors.amber),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Kills: $kills',
-                style: const TextStyle(fontSize: 20, color: Colors.white),
-              ),
-              Text(
-                'High Kills: $highKills',
-                style: const TextStyle(fontSize: 20, color: Colors.amber),
-              ),
-              const SizedBox(height: 20),
-              MenuButton(
-                text: 'REPLAY',
-                onPressed: () => Get.offAllNamed(Routes.GAME),
-                gradientColors: const [Color(0xFF66BB6A), Color(0xFF00796B)],
-              ),
-              const SizedBox(height: 12),
-              MenuButton(
-                text: 'HOME',
-                onPressed: () => Get.offAllNamed(Routes.HOME),
-                gradientColors: const [Color(0xFFBDBDBD), Color(0xFF616161)],
-              ),
-            ],
+          // --- MAIN CONTENT ---
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // --- GAME OVER TEXT ---
+                Text(
+                  'GAME OVER!',
+                  style: TextStyle(
+                    color: Colors.pinkAccent,
+                    fontSize: 48,
+                    shadows: [
+                      Shadow(
+                        offset: Offset(1, 1),
+                        blurRadius: 5,
+                        color: Colors.white, // Outline color
+                      ),
+                      Shadow(
+                        offset: Offset(-1, 1),
+                        blurRadius: 5,
+                        color: Colors.white,
+                      ),
+                      Shadow(
+                        offset: Offset(1, -1),
+                        blurRadius: 5,
+                        color: Colors.white,
+                      ),
+                      Shadow(
+                        offset: Offset(-1, -1),
+                        blurRadius: 5,
+                        color: Colors.white,
+                      ),
+                    ],
+                    fontWeight: FontWeight.bold,
+                    // shadows: const [Shadow(blurRadius: 10, color: Colors.black87)],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // --- SCORE POPUP ---
+                Container(
+                  width: 320,
+                  height: 320,
+                  decoration: const BoxDecoration(
+                    image: DecorationImage(
+                      image: AssetImage('assets/images/Score Popup.png'),
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 55),
+                      const Text(
+                        'AWESOME!',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 35),
+                      _buildScoreRow('Your Score', currentScore.toString()),
+                      // const SizedBox(height: 15),
+                      // _buildScoreRow('High Score', highScore.toString()),
+                      const SizedBox(height: 15),
+                      _buildScoreRow('Kills', currentKills.toString()),
+                      // const SizedBox(height: 15),
+                      // _buildScoreRow('High Kills', highKills.toString()),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 30),
+
+                // --- HOME BUTTON ---
+                GestureDetector(
+                  onTap: () {
+                    game.resumeEngine();
+                    Get.offAllNamed(Routes.HOME);
+                  },
+                  child: Container(
+                    width: 280,
+                    height: 70,
+                    decoration: const BoxDecoration(
+                      image: DecorationImage(
+                        image: AssetImage('assets/images/Replay Btn.png'),
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'HOME',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
+      ),
+    );
+  }
+
+  // Helper widget for a consistent score row style
+  Widget _buildScoreRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 60.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.brown,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.brown,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
       ),
     );
   }

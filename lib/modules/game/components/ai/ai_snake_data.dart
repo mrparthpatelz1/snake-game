@@ -1,56 +1,86 @@
-// lib/modules/game/components/ai/ai_snake_data.dart
-
+import 'dart:math';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
-enum AiDifficulty { easy, medium, hard }
-
-enum AiState { wandering, chasing, fleeing, avoiding_boundary, seeking_center }
+/// Keep the same states you already use elsewhere
+enum AiState {
+  avoiding_boundary,
+  seeking_center,
+  chasing,
+  fleeing,
+  attacking,
+  defending,
+  seeking_food,
+  wandering,
+}
 
 class AiSnakeData {
+  // --- Core ---
   Vector2 position;
-  Vector2 prevPosition;      // Added to interpolate between frames
-  Vector2 displayPosition;   // Position used for smooth rendering
-  double angle = 0.0;
-  final List<Vector2> bodySegments = [];
-  final List<Color> skinColors;
-  Vector2 targetDirection;
-  final List<Vector2> path = [];
+  double angle; // radians (0 right, pi/2 down if using screenAngle)
+  Vector2 targetDirection; // normalized target dir
+  List<Vector2> bodySegments = [];
+  List<Vector2> path = [];
 
-  Rect boundingBox = Rect.zero;
-
-  double headRadius = 0;
-  double bodyRadius = 0;
-  final double segmentSpacing;
-  double speed;
-  int segmentCount;
-  final double minRadius;
+  // --- Sizes & look ---
+  double headRadius;
+  double bodyRadius;
+  double minRadius;
   double maxRadius;
+  List<Color> skinColors;
 
-  late AiDifficulty difficulty;
-  late AiState aiState;
+  // --- Movement ---
+  int segmentCount;
+  double segmentSpacing;
+  double baseSpeed;
+  double boostSpeed;
+
+  // --- AI ---
+  AiState aiState = AiState.wandering;
+
+  // --- Boost ---
+  bool isBoosting = false;
+  double boostDuration = 0.0;
+  double boostCooldownTimer = 0.0;
+
+  // --- Misc ---
+  bool isDead = false;
+  Rect boundingBox = const Rect.fromLTWH(0, 0, 0, 0);
 
   AiSnakeData({
     required this.position,
     required this.skinColors,
     required this.targetDirection,
-    required this.segmentSpacing,
-    required this.speed,
     required this.segmentCount,
+    required this.segmentSpacing,
+    required this.baseSpeed,
+    required this.boostSpeed,
     required this.minRadius,
     required this.maxRadius,
-  }) : prevPosition = position.clone(),
-        displayPosition = position.clone() {
-    aiState = AiState.wandering;
+    double? headRadius,
+    this.angle = 0.0,
+  })  : headRadius = headRadius ?? minRadius,
+        bodyRadius = (headRadius ?? minRadius) - 1.0 {
+    // Normalize direction
+    if (targetDirection.length2 == 0) {
+      targetDirection = Vector2(1, 0);
+    } else {
+      targetDirection.normalize();
+    }
+    angle = targetDirection.screenAngle();
   }
 
-  // Call this at logic update start to save previous position
-  void savePreviousPosition() {
-    prevPosition = position.clone();
-  }
+  /// Convenience to (re)compute bounding box from head + segments
+  void rebuildBoundingBox() {
+    double minX = position.x, maxX = position.x;
+    double minY = position.y, maxY = position.y;
 
-  // Call this before rendering to interpolate display position smoothly
-  void interpolatePosition(double alpha) {
-    displayPosition = prevPosition * (1 - alpha) + position * alpha;
+    for (final seg in bodySegments) {
+      if (seg.x < minX) minX = seg.x;
+      if (seg.x > maxX) maxX = seg.x;
+      if (seg.y < minY) minY = seg.y;
+      if (seg.y > maxY) maxY = seg.y;
+    }
+    boundingBox = Rect.fromLTRB(minX - 32, minY - 32, maxX + 32, maxY + 32);
   }
 }

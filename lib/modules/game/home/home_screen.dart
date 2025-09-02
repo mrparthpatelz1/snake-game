@@ -8,20 +8,21 @@ import '../../../routes/app_routes.dart';
 import '../components/world/image_background.dart';
 import '../controllers/home_controller.dart';
 import '../../../data/service/settings_service.dart';
+import '../controllers/player_controller.dart';
 
 // --- THIS IS THE FIX ---
 // The BackgroundGame class is now correctly defined at the top level of the file,
 // outside of the HomeScreen widget class.
-class BackgroundGame extends FlameGame {
-  @override
-  Future<void> onLoad() async {
-    await super.onLoad();
-    // We need a camera to pass to the background.
-    final cameraComponent = CameraComponent(world: world);
-    await addAll([world, cameraComponent]);
-    world.add(TileBackground(cameraToFollow: cameraComponent));
-  }
-}
+// class BackgroundGame extends FlameGame {
+//   @override
+//   Future<void> onLoad() async {
+//     await super.onLoad();
+//     // We need a camera to pass to the background.
+//     final cameraComponent = CameraComponent(world: world);
+//     await addAll([world, cameraComponent]);
+//     world.add(TileBackground(cameraToFollow: cameraComponent));
+//   }
+// }
 // --- END OF FIX ---
 
 class HomeScreen extends GetView<HomeController> {
@@ -29,112 +30,76 @@ class HomeScreen extends GetView<HomeController> {
 
   @override
   Widget build(BuildContext context) {
+    // Using MediaQuery to make positioning more responsive.
+    final screenPadding = MediaQuery.of(context).padding;
+
     return Scaffold(
+      backgroundColor: Color(0xFF0E143F),
       body: Stack(
         children: [
-          // The GameWidget will now be able to find and render our BackgroundGame.
-          Positioned.fill(child: GameWidget(game: BackgroundGame())),
-          // The rest of the UI remains the same.
+          // 1. Background remains the same
+          // Positioned.fill(child: GameWidget(game: BackgroundGame())),
+
+          // 2. Settings Icon (Top Left)
+          Positioned(
+            top: screenPadding.top + 16,
+            left: 16,
+            child: GestureDetector(
+              onTap: () {
+                // TODO: Implement settings functionality
+                Get.snackbar('Settings', 'Settings button pressed!');
+              },
+              child: Image.asset('assets/images/Settings.png', width: 60),
+            ),
+          ),
+
+          // 3. Main UI Content (Centered)
           Center(
             child: SingleChildScrollView(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text(
-                    'Slither.io Clone',
-                    style: TextStyle(
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      shadows: [
-                        Shadow(
-                          blurRadius: 10.0,
-                          color: Colors.black,
-                          offset: Offset(2.0, 2.0),
-                        ),
-                      ],
-                    ),
+                  // Title Image
+                  Image.asset(
+                    'assets/images/Title.png',
+                    width: Get.width * 0.9,
                   ),
-                  const SizedBox(height: 50),
-                  Obx(
-                    () => Text(
-                      'High Score: ${controller.highScore.value}',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 18,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    width: 300,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: TextField(
-                      controller: controller.nicknameController,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white, fontSize: 18),
-                      decoration: const InputDecoration(
-                        hintText: 'Enter your nickname',
-                        hintStyle: TextStyle(color: Colors.white54),
-                        border: InputBorder.none,
-                      ),
-                    ),
-                  ),
+                  const SizedBox(height: 40),
+
+                  // User Name Input Field with custom background
+                  _buildUsernameInput(),
                   const SizedBox(height: 20),
-                  SizedBox(
-                    width: 300,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueGrey.shade700,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                      ),
-                      onPressed: _showSkinPicker,
-                      child: const Text('CHANGE SKIN'),
-                    ),
+
+                  // Custom Image Button for "Snake Skins"
+                  _buildImageButton(
+                    onTap: () {
+                      // Navigate to the new customization screen
+                      Get.toNamed(Routes.CUSTOMIZATION);
+                    },
+                    buttonImage: 'assets/images/Snake Skin Btn.png',
+                    iconImage: 'assets/images/Snake Skin Icon.png',
+                    text: 'Snake Skins',
                   ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: 300,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.indigo.shade700,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                      ),
-                      onPressed: _showBackgroundPicker,
-                      child: const Text('CHANGE BACKGROUND'),
-                    ),
+                  const SizedBox(height: 15),
+
+                  // Custom Image Button for "Background Skins"
+                  _buildImageButton(
+                    onTap: _showBackgroundPicker,
+                    buttonImage: 'assets/images/Background Skin Btn.png',
+                    iconImage: 'assets/images/Background Skin Icon.png',
+                    text: 'Background Skins',
                   ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: 300,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green.shade700,
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                      ),
-                      onPressed: () {
-                        Get.toNamed(Routes.GAME);
-                      },
-                      child: const Text(
-                        'PLAY',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                  const SizedBox(height: 40),
+
+                  // "Tap to Play" Image Button
+                  GestureDetector(
+                    onTap: () {
+                      // Get.find<PlayerController>().reset();
+                      Get.toNamed(Routes.GAME);
+                    },
+                    child: Image.asset(
+                      'assets/images/Tap to Play.png',
+                      width: Get.width * 0.8,
                     ),
                   ),
                 ],
@@ -146,6 +111,81 @@ class HomeScreen extends GetView<HomeController> {
     );
   }
 
+  // Helper widget for the username input field
+  Widget _buildUsernameInput() {
+    return Container(
+      width: 300,
+      height: 65,
+      padding: const EdgeInsets.only(left: 80,right:20),
+      decoration: const BoxDecoration(
+        // color: Colors.red,
+        image: DecorationImage(
+          image: AssetImage('assets/images/User Name.png'),
+          fit: BoxFit.contain,
+        ),
+      ),
+      alignment: Alignment.center,
+      child: TextField(
+
+        controller: controller.nicknameController,
+        textAlign: TextAlign.start,
+        style: const TextStyle(color: Colors.white, fontSize: 18),
+        decoration: const InputDecoration(
+          hintText: 'User name',
+          hintStyle: TextStyle(color: Colors.white54),
+          border: InputBorder.none,
+        ),
+      ),
+    );
+  }
+
+  // Reusable helper widget for creating buttons with images
+  Widget _buildImageButton({
+    required VoidCallback onTap,
+    required String buttonImage,
+    required String iconImage,
+    required String text,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 250,
+        height: 75,
+        decoration: BoxDecoration(
+          // color: Colors.red,
+          image: DecorationImage(
+            image: AssetImage(buttonImage),
+            fit: BoxFit.fill,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(iconImage, height: 40),
+            const SizedBox(width: 10),
+            Text(
+              text,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                shadows: [
+                  Shadow(
+                    blurRadius: 4.0,
+                    color: Colors.black54,
+                    offset: Offset(2.0, 2.0),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 20), // Added for better centering
+          ],
+        ),
+      ),
+    );
+  }
+
+  // The bottom sheet methods for picking skins and backgrounds remain unchanged.
   void _showSkinPicker() {
     final settings = Get.find<SettingsService>();
     final skins = settings.allSkins;
@@ -159,6 +199,7 @@ class HomeScreen extends GetView<HomeController> {
         child: Wrap(
           runSpacing: 12,
           spacing: 12,
+          alignment: WrapAlignment.center,
           children: [
             for (int i = 0; i < skins.length; i++)
               GestureDetector(
@@ -179,6 +220,7 @@ class HomeScreen extends GetView<HomeController> {
           ],
         ),
       ),
+      isScrollControlled: true,
     );
   }
 
@@ -204,6 +246,7 @@ class HomeScreen extends GetView<HomeController> {
         child: Wrap(
           runSpacing: 12,
           spacing: 12,
+          alignment: WrapAlignment.center,
           children: [
             for (final c in choices)
               GestureDetector(
