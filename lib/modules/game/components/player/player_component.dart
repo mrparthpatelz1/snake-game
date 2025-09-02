@@ -1,3 +1,5 @@
+// lib/modules/game/components/player/player_component.dart
+
 import 'dart:math';
 import 'package:flame/components.dart';
 import 'package:flame/extensions.dart';
@@ -38,7 +40,6 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
   final double _growthSpeed = 5.0;
   double _elapsedTime = 0.0;
 
-  // --- FIX: Re-introducing a path for a stable, smooth follow animation ---
   final List<Vector2> _path = [];
 
   @override
@@ -46,45 +47,66 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     await super.onLoad();
     anchor = Anchor.center;
     headSprite = await game.loadSprite(settings.selectedHead);
-    add(CircleHitbox(radius: playerController.headRadius.value, position: Vector2.zero(), anchor: Anchor.center));
+    add(CircleHitbox(
+        radius: playerController.headRadius.value,
+        position: Vector2.zero(),
+        anchor: Anchor.center
+    ));
+
     for (int i = 0; i < playerController.initialSegmentCount; i++) {
       bodySegments.add(BodySegment(position.clone()));
     }
   }
 
-  // No changes to these methods
   void _growSnake(int amount) {
     playerController.foodScore.value += amount;
-    final newSegments = (playerController.foodScore.value ~/ playerController.foodPerSegment) - (playerController.segmentCount.value - playerController.initialSegmentCount);
+    final newSegments = (playerController.foodScore.value ~/ playerController.foodPerSegment) -
+        (playerController.segmentCount.value - playerController.initialSegmentCount);
+
     if (newSegments > 0) {
       playerController.segmentCount.value += newSegments;
       for (int i = 0; i < newSegments; i++) {
         bodySegments.add(BodySegment(bodySegments.last.position.clone(), scale: 0.0));
       }
     }
-    final desiredRadius = playerController.minRadius + (playerController.foodScore.value / playerController.foodPerRadius);
-    playerController.headRadius.value = desiredRadius.clamp(playerController.minRadius, playerController.maxRadius);
+
+    final desiredRadius = playerController.minRadius +
+        (playerController.foodScore.value / playerController.foodPerRadius);
+    playerController.headRadius.value = desiredRadius.clamp(
+        playerController.minRadius,
+        playerController.maxRadius
+    );
     playerController.bodyRadius.value = playerController.headRadius.value;
   }
+
   void _shrinkSnake() {
     if (bodySegments.length <= _minLength) return;
     playerController.segmentCount.value--;
     playerController.foodScore.value -= playerController.foodPerSegment;
     if (playerController.foodScore.value < 0) playerController.foodScore.value = 0;
     bodySegments.removeLast();
-    final desiredRadius = playerController.minRadius + (playerController.foodScore.value / playerController.foodPerRadius);
-    playerController.headRadius.value = desiredRadius.clamp(playerController.minRadius, playerController.maxRadius);
+
+    final desiredRadius = playerController.minRadius +
+        (playerController.foodScore.value / playerController.foodPerRadius);
+    playerController.headRadius.value = desiredRadius.clamp(
+        playerController.minRadius,
+        playerController.maxRadius
+    );
     playerController.bodyRadius.value = playerController.headRadius.value;
   }
+
   void die() {
     if (isDead) return;
     isDead = true;
-    for (final segment in bodySegments) { foodManager.spawnFoodAt(segment.position); }
+    for (final segment in bodySegments) {
+      foodManager.spawnFoodAt(segment.position);
+    }
     final currentScore = playerController.foodScore.value;
-    if (currentScore > _scoreService.getHighScore()) { _scoreService.saveHighScore(currentScore); }
+    if (currentScore > _scoreService.getHighScore()) {
+      _scoreService.saveHighScore(currentScore);
+    }
     game.overlays.add('revive');
     game.pauseEngine();
-    // Future.delayed(const Duration(milliseconds: 100), () { removeFromParent(); });
   }
 
   void revive() {
@@ -104,7 +126,8 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
 
     _shrinkTimer.update(dt);
     if (canBoost && !_shrinkTimer.isRunning()) {
-      _shrinkTimer.onTick = _shrinkSnake; _shrinkTimer.start();
+      _shrinkTimer.onTick = _shrinkSnake;
+      _shrinkTimer.start();
     } else if (!canBoost && _shrinkTimer.isRunning()) {
       _shrinkTimer.stop();
     }
@@ -124,48 +147,70 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
       headAngle += rotationAmount * angleDiff.sign;
     }
 
-    // --- FIX: New stable path-following logic ---
-    // 1. Manage the path: Add a new point if the head has moved enough.
+    // Path-following logic
     if (_path.isEmpty || position.distanceTo(_path.first) > 4.0) {
       _path.insert(0, position.clone());
     }
 
-    // 2. Trim the path so it doesn't grow forever.
     final maxPathLength = bodySegments.length * 10 + 1;
     if (_path.length > maxPathLength) {
       _path.removeRange(maxPathLength, _path.length);
     }
 
-    // 3. Update each body segment to smoothly follow the path.
     for (int i = 0; i < bodySegments.length; i++) {
       final segment = bodySegments[i];
       if (segment.scale < 1.0) {
         segment.scale = min(1.0, segment.scale + dt * _growthSpeed);
       }
 
-      // Find this segment's target point on the path.
       final targetPoint = _getPointOnPathAtDistance((i + 1) * playerController.segmentSpacing);
-
-      // Smoothly move the segment towards its target point. This is inherently stable.
       segment.position.lerp(targetPoint, 1 - exp(-25 * dt));
     }
-    // --- End of fix ---
 
-    position.clamp(SlitherGame.playArea.topLeft.toVector2(), SlitherGame.playArea.bottomRight.toVector2());
+    position.clamp(
+        SlitherGame.playArea.topLeft.toVector2(),
+        SlitherGame.playArea.bottomRight.toVector2()
+    );
 
+    // Enhanced food consumption with animation
+    _checkAndConsumeFoodWithAnimation();
+  }
+
+  void _checkAndConsumeFoodWithAnimation() {
     final eatDistSq = (playerController.headRadius.value * playerController.headRadius.value) + 500;
-    final eatenFood = <FoodModel>[];
-    for (final food in foodManager.foodList) {
-      if (position.distanceToSquared(food.position) < eatDistSq) { eatenFood.add(food); }
+    final candidateFood = <FoodModel>[];
+
+    // Check only eatable food (not already being consumed)
+    for (final food in foodManager.eatableFoodList) {
+      if (position.distanceToSquared(food.position) < eatDistSq) {
+        candidateFood.add(food);
+      }
     }
-    for (final food in eatenFood) {
-      foodManager.removeFood(food);
+
+    // Start consumption animation for each food item
+    for (final food in candidateFood) {
+      foodManager.startConsumingFood(food, position);
       _growSnake(food.growth);
+
+      // Spawn new food to replace the one being consumed
       foodManager.spawnFood(position);
+
+      // Optional: Add some visual feedback or sound effect here
+      _addEatingEffect(food);
     }
   }
 
-  // --- FIX: Re-added the helper function for the path-following system ---
+  void _addEatingEffect(FoodModel food) {
+    // You can add additional effects here like:
+    // - Screen shake
+    // - Particle effects
+    // - Sound effects
+    // - Score popup animations
+
+    // For now, just a simple debug print
+    print('Player consuming food worth ${food.growth} points!');
+  }
+
   Vector2 _getPointOnPathAtDistance(double distance) {
     if (_path.isEmpty) return position.clone();
 
@@ -185,7 +230,6 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     return searchPath.last;
   }
 
-
   double _getAngleDifference(double a, double b) {
     var diff = (b - a + pi) % (2 * pi) - pi;
     return diff < -pi ? diff + 2 * pi : diff;
@@ -201,7 +245,12 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     }
     canvas.save();
     canvas.rotate(headAngle + (pi) + _bobAngle);
-    headSprite?.render(canvas, position: Vector2.zero(), size: Vector2.all(playerController.headRadius.value * 2), anchor: Anchor.center);
+    headSprite?.render(
+        canvas,
+        position: Vector2.zero(),
+        size: Vector2.all(playerController.headRadius.value * 2),
+        anchor: Anchor.center
+    );
     canvas.restore();
   }
 
@@ -214,7 +263,8 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
       colors: [color.withOpacity(1.0), color.withOpacity(0.6)],
       stops: const [0.5, 1.0],
     );
-    final paint = Paint()..shader = gradient.createShader(Rect.fromCircle(center: offset, radius: radius));
+    final paint = Paint()
+      ..shader = gradient.createShader(Rect.fromCircle(center: offset, radius: radius));
     canvas.drawCircle(offset, radius, paint);
   }
 }

@@ -1,3 +1,5 @@
+// lib/modules/game/views/game_screen.dart
+
 import 'dart:math';
 import 'package:flame/experimental.dart';
 import 'package:flame/game.dart';
@@ -55,17 +57,13 @@ class SlitherGame extends FlameGame with DragCallbacks {
   Future<void> onLoad() async {
     await super.onLoad();
 
-    // The game's canvas size is available here.
-    // We calculate the visible world dimensions by dividing the canvas size by the zoom level.
     const zoom = 0.7;
     final visibleWidth = size.x / zoom;
     final visibleHeight = size.y / zoom;
     final screenDiagonal = sqrt(visibleWidth * visibleWidth + visibleHeight * visibleHeight);
 
-    // Set spawn radius to be half the diagonal of the screen plus a 100px buffer
     final spawnRadius = (screenDiagonal / 2) + 100;
-    // Set max distance to be larger, so food doesn't disappear at the edge of the screen
-    final maxDistance = spawnRadius + 200;
+    final maxDistance = spawnRadius + 100;
 
     foodManager = FoodManager(
       worldBounds: worldBounds,
@@ -75,15 +73,19 @@ class SlitherGame extends FlameGame with DragCallbacks {
 
     cameraComponent = CameraComponent()..debugMode = false;
     player = PlayerComponent(foodManager: foodManager)..position = Vector2.zero();
-    aiManager = AiManager(foodManager: foodManager, player: player);
+
+    // Initialize AI manager with more snakes for better gameplay
+    aiManager = AiManager(
+      foodManager: foodManager,
+      player: player,
+      numberOfSnakes: 30, // Increased initial count
+    );
 
     final foodPainter = FoodPainter(
       foodManager: foodManager,
       cameraToFollow: cameraComponent,
     );
-    aiPainter = AiPainter(
-        aiManager: aiManager
-    );
+    aiPainter = AiPainter(aiManager: aiManager);
 
     world = World(
       children: [
@@ -98,7 +100,7 @@ class SlitherGame extends FlameGame with DragCallbacks {
     await add(world);
 
     cameraComponent.world = world;
-    cameraComponent.viewfinder.zoom = zoom; // Apply the zoom level
+    cameraComponent.viewfinder.zoom = zoom;
     await add(cameraComponent);
     cameraComponent.follow(player);
 
@@ -167,10 +169,13 @@ class SlitherGame extends FlameGame with DragCallbacks {
 
     _updateCount++;
     if (_updateCount % 3600 == 0) {
-      print('Game update running. Update count: $_updateCount');
+      final aiStats = 'AI: ${aiManager.aliveSnakeCount}/${aiManager.totalSnakeCount}';
+      print('Game update running. Update: $_updateCount | $aiStats');
     }
 
-    _checkCollisions();
+    // Enhanced collision detection - Player vs AI only
+    // AI vs AI collisions are now handled in AiManager
+    _checkPlayerVsAiCollisions();
   }
 
   @override
@@ -205,56 +210,59 @@ class SlitherGame extends FlameGame with DragCallbacks {
     super.onDragUpdate(event);
   }
 
-  void _checkCollisions() {
+  // Optimized collision detection - only check Player vs AI
+  void _checkPlayerVsAiCollisions() {
     _collisionCallCount++;
-    if (_collisionCallCount % 120 == 0) {
-      print('_checkCollisions called $_collisionCallCount times');
-    }
 
     if (!aiManager.isMounted) {
-      print('AiManager not mounted yet; skipping collisions.');
+      if (_collisionCallCount % 120 == 0) {
+        print('AiManager not mounted yet; skipping collisions.');
+      }
       return;
     }
+
+    if (player.isDead) return;
 
     final playerHeadPos = player.position;
     final playerHeadRadius = playerController.headRadius.value;
     final playerBodyRadius = playerController.bodyRadius.value;
 
     _frameCount++;
-    if (_frameCount % 60 == 0) {
+    if (_frameCount % 300 == 0) { // Reduced debug frequency
       print(
-        'Collision check: snakes=${aiManager.snakes.length} '
-            'player=(${playerHeadPos.x.toStringAsFixed(1)}, ${playerHeadPos.y.toStringAsFixed(1)}) '
-            'rHead=$playerHeadRadius',
+        'Player collision check: AI snakes=${aiManager.aliveSnakeCount} '
+            'player=(${playerHeadPos.x.toStringAsFixed(0)}, ${playerHeadPos.y.toStringAsFixed(0)}) '
+            'rHead=${playerHeadRadius.toStringAsFixed(1)}',
       );
     }
 
+    // Only check visible AI snakes for performance
     final visibleRect = cameraComponent.visibleWorldRect.inflate(300);
     final List<AiSnakeData> snakesToKill = [];
 
-    int shown = 0;
+    int checkedSnakes = 0;
     for (final snake in aiManager.snakes) {
+      if (snake.isDead) continue;
       if (!visibleRect.overlaps(snake.boundingBox)) continue;
 
-      if (shown < 3 && _frameCount % 60 == 0) {
-        print(
-          'AI Snake ${++shown} pos=(${snake.position.x.toStringAsFixed(1)}, ${snake.position.y.toStringAsFixed(1)}) '
-              'rHead=${snake.headRadius}',
-        );
-      }
+      checkedSnakes++;
 
+      // Player head vs AI head collision
       final headToHeadDistance = playerHeadPos.distanceTo(snake.position);
       final requiredHeadDistance = playerHeadRadius + snake.headRadius;
 
       if (headToHeadDistance <= requiredHeadDistance) {
-        if (playerHeadRadius > snake.headRadius) {
+        if (playerHeadRadius > snake.headRadius + 1.0) {
+          // Player wins
           print('Player wins H2H: $playerHeadRadius vs ${snake.headRadius}');
           snakesToKill.add(snake);
-        } else if (playerHeadRadius < snake.headRadius) {
+        } else if (playerHeadRadius < snake.headRadius - 1.0) {
+          // AI wins
           print('AI wins H2H: $playerHeadRadius vs ${snake.headRadius}');
           handlePlayerDeath(snake);
           return;
         } else {
+          // Equal size - both die
           print('Equal H2H — both die at r=$playerHeadRadius');
           snakesToKill.add(snake);
           handlePlayerDeath(snake);
@@ -263,34 +271,42 @@ class SlitherGame extends FlameGame with DragCallbacks {
         continue;
       }
 
+      // Player head vs AI body collision
       for (int i = 0; i < snake.bodySegments.length; i++) {
         final seg = snake.bodySegments[i];
         final bodyDistance = playerHeadPos.distanceTo(seg);
         final requiredBodyDistance = playerHeadRadius + snake.bodyRadius;
+
         if (bodyDistance <= requiredBodyDistance) {
-          print('Player head hit AI body[$i]: d=$bodyDistance <= $requiredBodyDistance');
-          snakeThatKilledPlayer = snake;
+          print('Player head hit AI body[$i]: d=${bodyDistance.toStringAsFixed(1)} <= ${requiredBodyDistance.toStringAsFixed(1)}');
           handlePlayerDeath(snake);
           return;
         }
       }
 
+      // AI head vs Player body collision
       for (int i = 0; i < player.bodySegments.length; i++) {
         final seg = player.bodySegments[i].position;
         final bodyDistance = snake.position.distanceTo(seg);
         final requiredBodyDistance = snake.headRadius + playerBodyRadius;
+
         if (bodyDistance <= requiredBodyDistance) {
-          print('AI head hit player body[$i]: d=$bodyDistance <= $requiredBodyDistance (AI dies)');
+          print('AI head hit player body[$i]: d=${bodyDistance.toStringAsFixed(1)} <= ${requiredBodyDistance.toStringAsFixed(1)} (AI dies)');
           snakesToKill.add(snake);
           break;
         }
       }
     }
 
+    // Process killed snakes
     for (final snake in snakesToKill) {
       playerController.kills.value++;
       aiManager.killSnakeAndScatterFood(snake);
       aiManager.spawnNewSnake();
+    }
+
+    if (_frameCount % 300 == 0 && checkedSnakes > 0) {
+      print('Checked $checkedSnakes visible AI snakes for player collisions');
     }
   }
 }
@@ -304,10 +320,13 @@ class GameScreen extends StatelessWidget {
 
     return Scaffold(
       body: GameWidget(
-        game: SlitherGame(),
+        game: slitherGame,
         overlayBuilderMap: {
           'pauseMenu': (context, game) => PauseMenu(game: game as SlitherGame),
-          'gameOver': (context, game) => GameOverMenu(game: game as SlitherGame, playerController: slitherGame.playerController,),
+          'gameOver': (context, game) => GameOverMenu(
+            game: game as SlitherGame,
+            playerController: slitherGame.playerController,
+          ),
           'revive': (context, game) {
             Get.put(ReviveController(game: game as SlitherGame));
             return const ReviveOverlay();

@@ -1,6 +1,5 @@
-// lib/app/modules/game/components/food/food_manager.dart
+// lib/modules/game/components/food/food_manager.dart
 
-// import 'dart';
 import 'dart:math';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
@@ -8,7 +7,7 @@ import '../../../../data/models/food_model.dart';
 
 class FoodManager {
   final Random _random = Random();
-  final int foodCount = 300; // Adjusted to 300 as requested
+  final int foodCount = 100;
   final List<FoodModel> foodList = [];
   final double spawnRadius;
   final double maxDistance;
@@ -20,32 +19,39 @@ class FoodManager {
     Colors.purpleAccent, Colors.orangeAccent, Colors.cyanAccent, Colors.pinkAccent,
   ];
 
-  FoodManager({required this.worldBounds, required this.spawnRadius, required this.maxDistance}) {
-    // Initial food spawn is now handled in the first update call
-  }
+  FoodManager({
+    required this.worldBounds,
+    required this.spawnRadius,
+    required this.maxDistance
+  });
 
   void update(double dt, Vector2 playerPosition) {
     _updateCounter++;
-    if (_updateCounter < 60) return; // Only run this logic once per second (approx)
+
+    print("check here food list count<><><><><><><><><><><><><><>${foodList.length}");
+
+    // Update food animations
+    _updateFoodAnimations(dt);
+
+    if (_updateCounter < 60) return; // Only run cleanup logic once per second
     _updateCounter = 0;
 
     final initialCount = foodList.length;
-    // print('Before removal: $initialCount');
 
-    // Remove food that is too far from the player
+    // Remove consumed food and food that is too far from the player
     int removedCount = 0;
     foodList.removeWhere((food) {
-      if (playerPosition.distanceTo(food.position) > maxDistance) {
+      if (food.shouldBeRemoved) {
+        removedCount++;
+        return true;
+      }
+      if (food.state == FoodState.normal &&
+          playerPosition.distanceTo(food.position) > maxDistance) {
         removedCount++;
         return true;
       }
       return false;
     });
-
-    final countAfterRemoval = foodList.length;
-    // if (removedCount > 0) {
-    //   print('Removed: $removedCount food items. Count is now: $countAfterRemoval');
-    // }
 
     // Spawn new food if needed
     int spawnedCount = 0;
@@ -55,7 +61,13 @@ class FoodManager {
     }
 
     if (removedCount > 0 || spawnedCount > 0) {
-       print('Food Update -> Removed: $removedCount, Spawned: $spawnedCount, Total: ${foodList.length}');
+      print('=========================Food Update -> Removed: $removedCount, Spawned: $spawnedCount, Total: ${foodList.length}');
+    }
+  }
+
+  void _updateFoodAnimations(double dt) {
+    for (final food in foodList) {
+      food.updateConsumption(dt);
     }
   }
 
@@ -105,7 +117,18 @@ class FoodManager {
     ));
   }
 
+  // Modified to start consumption animation instead of immediate removal
+  void startConsumingFood(FoodModel food, Vector2 snakeHeadPosition) {
+    food.startConsumption(snakeHeadPosition);
+  }
+
+  // Get list of food that can be eaten (not being consumed)
+  List<FoodModel> get eatableFoodList =>
+      foodList.where((food) => food.canBeEaten).toList();
+
+  // Legacy method for backward compatibility - now starts consumption
   void removeFood(FoodModel food) {
+    // For immediate removal (like when spawning from dead snakes)
     foodList.remove(food);
   }
 }
