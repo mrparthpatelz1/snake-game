@@ -60,11 +60,11 @@ class PlayerController extends GetxController {
   late final RxInt segmentCount = initialSegmentCount.obs;
 
 
-  double get segmentSpacing {
-    final baseSpacing = headRadius.value * 0.7;
-    // When boosting, reduce spacing by half to make the body look tighter.
-    return isBoosting.value ? baseSpacing * 1.5 : baseSpacing;
-  }
+  // double get segmentSpacing {
+  //   final baseSpacing = headRadius.value * 0.7;
+  //   // When boosting, reduce spacing by half to make the body look tighter.
+  //   return isBoosting.value ? baseSpacing * 1.1 : baseSpacing;
+  // }
 
   // --- Status ---
   final RxBool isBoosting = false.obs;

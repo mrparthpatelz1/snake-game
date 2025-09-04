@@ -110,11 +110,16 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     snake.deathAnimationTimer = AiSnakeData.deathAnimationDuration;
     snake.originalScale = 1.0;
 
-    // Immediately scatter food using the new method
-    foodManager.scatterFoodFromSnake(snake.position, snake.headRadius, snake.segmentCount);
+    // NEW: Scatter food along the snake's body path using the new method
+    foodManager.scatterFoodFromAiSnake(
+        snake.position,
+        snake.headRadius,
+        snake.segmentCount,
+        snake.bodySegments
+    );
 
     // Additional visual feedback
-    print('Snake death: scattering food at position (${snake.position.x.toStringAsFixed(1)}, ${snake.position.y.toStringAsFixed(1)})');
+    print('Snake death: scattering food along body path at position (${snake.position.x.toStringAsFixed(1)}, ${snake.position.y.toStringAsFixed(1)})');
   }
 
   void _updateDyingSnakes(double dt) {
@@ -292,12 +297,14 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     _spawnSnakeAt(pos);
   }
 
-  void _spawnSnakeAt(Vector2 pos) {
+  void _spawnSnakeAt(Vector2 pos) async {
     final initCount = 12 + _random.nextInt(18);
     final baseSpeed = 60.0 + _random.nextDouble() * 25.0;
 
     // NEW: Use random player skins for AI snakes
     final randomSkin = _getRandomPlayerSkin();
+    final randomHead = _settingsService.allHeads[_random.nextInt(_settingsService.allHeads.length)];
+    final headSprite = await game.loadSprite(randomHead);
 
     final snake = AiSnakeData(
       position: pos,
@@ -309,6 +316,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
       boostSpeed: baseSpeed * 1.6,
       minRadius: 12.0,
       maxRadius: 40.0,
+      headSprite: headSprite
     );
 
     final bonus = (initCount / 25).floor().toDouble();
@@ -349,12 +357,13 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     });
   }
 
+  // NEW: Enhanced spawning to ensure snakes spawn outside visible area
   void _ensureMinSnakesAroundPlayer() {
     const minActive = 15;
     const maxActive = 25; // Limit maximum for performance
     const spawnRadius = 900.0;
     const safeZone = 420.0;
-    const offscreenMargin = 60.0;
+    const offscreenMargin = 150.0; // Increased margin to ensure offscreen spawning
 
     final near = snakes.where((s) =>
     !s.isDead && s.position.distanceTo(player.position) < spawnRadius).length;
@@ -363,18 +372,46 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
 
     if (near < minActive) {
       final need = (minActive - near).clamp(0, 5); // Limit spawning rate
-      final visible = game.cameraComponent.visibleWorldRect.inflate(offscreenMargin);
+      final visible = game.cameraComponent.visibleWorldRect.inflate(-offscreenMargin); // Negative inflation to ensure offscreen
 
       for (int i = 0; i < need; i++) {
-        final ang = _random.nextDouble() * pi * 2;
-        final dist = safeZone + _random.nextDouble() * (spawnRadius - safeZone);
-        final spawnPos = player.position + Vector2(cos(ang), sin(ang)) * dist;
+        Vector2? spawnPos = _findOffscreenSpawnPosition(safeZone, spawnRadius, visible);
 
-        if (!visible.contains(spawnPos.toOffset())) {
+        if (spawnPos != null) {
           _spawnSnakeAt(spawnPos);
+          print('Spawned AI snake at offscreen position: (${spawnPos.x.toStringAsFixed(0)}, ${spawnPos.y.toStringAsFixed(0)})');
         }
       }
     }
+  }
+
+  // NEW: Find a spawn position that's outside the visible area
+  Vector2? _findOffscreenSpawnPosition(double safeZone, double spawnRadius, Rect visibleArea) {
+    const maxAttempts = 10;
+
+    for (int attempt = 0; attempt < maxAttempts; attempt++) {
+      final ang = _random.nextDouble() * pi * 2;
+      final dist = safeZone + _random.nextDouble() * (spawnRadius - safeZone);
+      final spawnPos = player.position + Vector2(cos(ang), sin(ang)) * dist;
+
+      // Check if position is outside visible area and within world bounds
+      if (!visibleArea.contains(spawnPos.toOffset()) &&
+          SlitherGame.worldBounds.contains(spawnPos.toOffset())) {
+        return spawnPos;
+      }
+    }
+
+    // Fallback: spawn at edge of visible area
+    final edgeAngles = [0, pi/2, pi, 3*pi/2]; // Right, Down, Left, Up
+    final edgeAngle = edgeAngles[_random.nextInt(edgeAngles.length)];
+    final edgeDistance = spawnRadius * 0.8;
+    final fallbackPos = player.position + Vector2(cos(edgeAngle), sin(edgeAngle)) * edgeDistance;
+
+    // Clamp to world bounds
+    fallbackPos.x = fallbackPos.x.clamp(SlitherGame.worldBounds.left, SlitherGame.worldBounds.right);
+    fallbackPos.y = fallbackPos.y.clamp(SlitherGame.worldBounds.top, SlitherGame.worldBounds.bottom);
+
+    return fallbackPos;
   }
 
   bool _isNearPlayer(AiSnakeData snake, double range) =>
@@ -709,17 +746,26 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     return nearest;
   }
 
-  AiSnakeData spawnNewSnake({Vector2? pos}) {
+  Future<AiSnakeData> spawnNewSnake({Vector2? pos}) async {
     final random = Random();
-    final world = game.cameraComponent.visibleWorldRect;
 
-    final startPos = pos ??
-        Vector2(
-          player.position.x + (random.nextDouble() - 0.5) * 1000,
-          player.position.y + (random.nextDouble() - 0.5) * 1000,
-        );
+    // NEW: Try to spawn offscreen first
+    Vector2 startPos;
+    if (pos != null) {
+      startPos = pos;
+    } else {
+      final visibleRect = game.cameraComponent.visibleWorldRect.inflate(-100); // Ensure offscreen
+      final offscreenPos = _findOffscreenSpawnPosition(400, 800, visibleRect);
+      startPos = offscreenPos ?? Vector2(
+        player.position.x + (random.nextDouble() - 0.5) * 1000,
+        player.position.y + (random.nextDouble() - 0.5) * 1000,
+      );
+    }
 
     final dir = (Vector2.random(random) - Vector2(0.5, 0.5)).normalized();
+
+    final randomHead = _settingsService.allHeads[_random.nextInt(_settingsService.allHeads.length)];
+    final headSprite = await game.loadSprite(randomHead);
 
     final snake = AiSnakeData(
       position: startPos,
@@ -731,6 +777,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
       boostSpeed: 140,
       minRadius: 8,
       maxRadius: 18,
+      headSprite: headSprite
     );
 
     for (int i = 0; i < snake.segmentCount; i++) {
@@ -739,6 +786,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     snake.rebuildBoundingBox();
 
     snakes.add(snake);
+    print('Spawned new AI snake at position: (${startPos.x.toStringAsFixed(0)}, ${startPos.y.toStringAsFixed(0)})');
     return snake;
   }
 

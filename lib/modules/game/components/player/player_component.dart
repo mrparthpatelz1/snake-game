@@ -148,12 +148,14 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
       headAngle += rotationAmount * angleDiff.sign;
     }
 
-    // Path-following logic
-    if (_path.isEmpty || position.distanceTo(_path.first) > 4.0) {
+    // NEW: Improved path-following with tighter spacing
+    if (_path.isEmpty || position.distanceTo(_path.first) > 2.0) { // Reduced from 4.0 to 2.0
       _path.insert(0, position.clone());
     }
 
-    final maxPathLength = bodySegments.length * 10 + 1;
+    // NEW: Dynamic segment spacing based on head radius and boost state
+    final dynamicSpacing = _calculateDynamicSpacing();
+    final maxPathLength = (bodySegments.length * (dynamicSpacing / 2)).round() + 1;
     if (_path.length > maxPathLength) {
       _path.removeRange(maxPathLength, _path.length);
     }
@@ -164,8 +166,9 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
         segment.scale = min(1.0, segment.scale + dt * _growthSpeed);
       }
 
-      final targetPoint = _getPointOnPathAtDistance((i + 1) * playerController.segmentSpacing);
-      segment.position.lerp(targetPoint, 1 - exp(-25 * dt));
+      // NEW: Use dynamic spacing for better attachment
+      final targetPoint = _getPointOnPathAtDistance((i + 1) * dynamicSpacing);
+      segment.position.lerp(targetPoint, 1 - exp(-30 * dt)); // Increased lerp speed from 25 to 30
     }
 
     position.clamp(
@@ -175,6 +178,13 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
 
     // Enhanced food consumption with animation
     _checkAndConsumeFoodWithAnimation();
+  }
+
+  // NEW: Calculate dynamic segment spacing for better head/body attachment
+  double _calculateDynamicSpacing() {
+    final baseSpacing = playerController.headRadius.value * 0.5; // Reduced from 0.7 to 0.5
+    // When boosting, reduce spacing even more for tighter body
+    return playerController.isBoosting.value ? baseSpacing * 0.8 : baseSpacing;
   }
 
   void _checkAndConsumeFoodWithAnimation() {

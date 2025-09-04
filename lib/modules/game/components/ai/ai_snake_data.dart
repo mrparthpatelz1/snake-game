@@ -28,6 +28,7 @@ class AiSnakeData {
   double minRadius;
   double maxRadius;
   List<Color> skinColors;
+  Sprite headSprite;
 
   // --- Movement ---
   int segmentCount;
@@ -64,6 +65,7 @@ class AiSnakeData {
     required this.boostSpeed,
     required this.minRadius,
     required this.maxRadius,
+    required this.headSprite,
     double? headRadius,
     this.angle = 0.0,
   })  : headRadius = headRadius ?? minRadius,
