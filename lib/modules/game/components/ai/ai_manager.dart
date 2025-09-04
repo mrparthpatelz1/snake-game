@@ -5,10 +5,10 @@ import 'package:flame/components.dart';
 import 'package:flame/extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../../../data/service/settings_service.dart';
 import '../../views/game_screen.dart';
 import '../food/food_manager.dart';
 import '../player/player_component.dart';
+import '../../../../data/service/settings_service.dart';
 import 'ai_snake_data.dart';
 
 class AiManager extends Component with HasGameReference<SlitherGame> {
@@ -73,7 +73,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     // Check AI vs AI collisions for visible snakes
     _checkAiVsAiCollisions(visibleRect);
 
-    // Clean up dead snakes and drop food
+    // Clean up dead snakes and scatter food
     final dead = snakes.where((s) => s.isDead).toList();
     for (final s in dead) {
       killSnakeAndScatterFood(s);
@@ -89,14 +89,16 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     // Ensure minimum snakes around player
     _ensureMinSnakesAroundPlayer();
 
-    if (_frameCount % 180 == 0) { // Debug every 3 seconds
+    if (_frameCount % 300 == 0) { // Debug every 5 seconds
+      final foodStats = foodManager.foodStats;
       debugPrint(
-        "AI Stats - Active: $activeCount | Passive: $passiveCount | Total: ${snakes.length}",
+          "AI: Active=$activeCount, Passive=$passiveCount, Total=${snakes.length} | "
+              "Food: Total=${foodStats['total']}, Animations=${foodStats['animations']}"
       );
     }
   }
 
-  // NEW: AI vs AI collision detection
+  // AI vs AI collision detection
   void _checkAiVsAiCollisions(Rect visibleRect) {
     final visibleSnakes = snakes.where((s) =>
     !s.isDead && visibleRect.overlaps(s.boundingBox)).toList();
@@ -123,7 +125,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
       if (snake1.headRadius > snake2.headRadius + 1.0) {
         // Snake1 wins
         snake2.isDead = true;
-        _growSnake(snake1, snake2.segmentCount ~/ 3); // Winner gets some growth
+        _growSnake(snake1, snake2.segmentCount ~/ 3);
       } else if (snake2.headRadius > snake1.headRadius + 1.0) {
         // Snake2 wins
         snake1.isDead = true;
@@ -163,14 +165,14 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     }
   }
 
-  // NEW: Periodic cleanup for performance optimization
+  // Periodic cleanup for performance optimization
   void _performPeriodicCleanup() {
     final playerPos = player.position;
     int removedCount = 0;
 
     // Remove snakes that are too far from player
     snakes.removeWhere((snake) {
-      if (snake.isDead) return false; // Dead snakes are handled separately
+      if (snake.isDead) return false;
 
       final distance = snake.position.distanceTo(playerPos);
       if (distance > MAX_DISTANCE_FROM_PLAYER) {
@@ -220,7 +222,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
   void _initializeSpawnZones() {
     const m = 300.0;
     final b = SlitherGame.worldBounds.deflate(m);
-    final grid = (sqrt(numberOfSnakes)).ceil().clamp(1, 10); // Limit grid size
+    final grid = (sqrt(numberOfSnakes)).ceil().clamp(1, 10);
     final w = b.width / grid, h = b.height / grid;
 
     _spawnZones = List.generate(grid * grid, (i) {
@@ -249,12 +251,12 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     final initCount = 12 + _random.nextInt(18);
     final baseSpeed = 60.0 + _random.nextDouble() * 25.0;
 
-    // NEW: Use random player skins for AI snakes
+    // Use random player skins for AI snakes
     final randomSkin = _getRandomPlayerSkin();
 
     final snake = AiSnakeData(
       position: pos,
-      skinColors: randomSkin, // Use player skins instead of random colors
+      skinColors: randomSkin,
       targetDirection: Vector2.random(_random).normalized(),
       segmentCount: initCount,
       segmentSpacing: 13.0 * 0.6,
@@ -282,11 +284,10 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     _updateBoundingBox(snake);
   }
 
-  // NEW: Get random player skin for AI snakes
+  // Get random player skin for AI snakes
   List<Color> _getRandomPlayerSkin() {
     final allSkins = _settingsService.allSkins;
     if (allSkins.isEmpty) {
-      // Fallback to basic colors if no skins available
       return _getBasicRandomSkin();
     }
 
@@ -304,7 +305,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
 
   void _ensureMinSnakesAroundPlayer() {
     const minActive = 15;
-    const maxActive = 25; // Limit maximum for performance
+    const maxActive = 25;
     const spawnRadius = 900.0;
     const safeZone = 420.0;
     const offscreenMargin = 60.0;
@@ -315,7 +316,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     if (near >= minActive && near <= maxActive) return;
 
     if (near < minActive) {
-      final need = (minActive - near).clamp(0, 5); // Limit spawning rate
+      final need = (minActive - near).clamp(0, 5);
       final visible = game.cameraComponent.visibleWorldRect.inflate(offscreenMargin);
 
       for (int i = 0; i < need; i++) {
@@ -340,7 +341,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
 
     final spacing = snake.segmentSpacing;
     Vector2 leader = snake.position;
-    for (int i = 0; i < snake.bodySegments.length && i < 5; i++) { // Limit body updates for performance
+    for (int i = 0; i < snake.bodySegments.length && i < 5; i++) {
       final seg = snake.bodySegments[i];
       final d = seg.distanceTo(leader);
       if (d > spacing) {
@@ -604,6 +605,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
 
   void _updateBoundingBox(AiSnakeData snake) => snake.rebuildBoundingBox();
 
+  // FIXED: No more food spawning when eating
   void _checkFoodConsumptionWithAnimation(AiSnakeData snake) {
     final eR = snake.headRadius + 15;
     final eatRadiusSquared = eR * eR;
@@ -614,17 +616,20 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     }).toList();
 
     for (final food in candidates) {
+      // Start consumption animation - NO FOOD SPAWNING
       foodManager.startConsumingFood(food, snake.position);
       _growSnake(snake, food.growth);
-      foodManager.spawnFood(snake.position);
+
+      // REMOVED: foodManager.spawnFood(snake.position); <- This was causing food explosion
+
       _addAiEatingEffect(snake, food);
     }
   }
 
   void _addAiEatingEffect(AiSnakeData snake, food) {
-    // Optional: Add visual or audio effects for AI eating
-    if (_frameCount % 60 == 0) { // Reduce debug spam
-      print('AI Snake consuming food worth ${food.growth} points!');
+    // Reduced debug spam - only for valuable food
+    if (food.growth > 1 && _frameCount % 120 == 0) {
+      print('AI Snake consuming valuable food worth ${food.growth} points!');
     }
   }
 
@@ -647,11 +652,10 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     }
   }
 
+  // FIXED: Use new scatter food system
   void killSnakeAndScatterFood(AiSnakeData snake) {
-    for (int i = 0; i < snake.bodySegments.length; i += 2) {
-      foodManager.spawnFoodAt(snake.bodySegments[i]);
-    }
-    foodManager.spawnFoodAt(snake.position);
+    // Use the new scatter system instead of direct spawning
+    foodManager.scatterFoodFromDeadSnake(snake.bodySegments, snake.position);
     snakes.remove(snake);
   }
 
@@ -670,7 +674,6 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
 
   AiSnakeData spawnNewSnake({Vector2? pos}) {
     final random = Random();
-    final world = game.cameraComponent.visibleWorldRect;
 
     final startPos = pos ??
         Vector2(
@@ -682,7 +685,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
 
     final snake = AiSnakeData(
       position: startPos,
-      skinColors: _getRandomPlayerSkin(), // Use player skins
+      skinColors: _getRandomPlayerSkin(),
       targetDirection: dir,
       segmentCount: 20 + random.nextInt(10),
       segmentSpacing: 10,
@@ -701,7 +704,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     return snake;
   }
 
-  // Getter for total snake count (for debugging)
+  // Getters for debugging
   int get totalSnakeCount => snakes.length;
   int get aliveSnakeCount => snakes.where((s) => !s.isDead).length;
 }

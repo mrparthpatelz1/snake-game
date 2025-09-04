@@ -149,9 +149,9 @@ class SlitherGame extends FlameGame with DragCallbacks {
   void showGameOver() {
     overlays.remove('revive');
 
-    for (final segment in player.bodySegments) {
-      foodManager.spawnFoodAt(segment.position);
-    }
+    // for (final segment in player.bodySegments) {
+    //   foodManager.spawnFoodAt(segment.position);
+    // }
     player.removeFromParent();
 
     overlays.add('gameOver');
