@@ -43,8 +43,15 @@ class AiSnakeData {
   double boostDuration = 0.0;
   double boostCooldownTimer = 0.0;
 
-  // --- Misc ---
+  // --- Death Animation ---
   bool isDead = false;
+  double deathAnimationTimer = 0.0;
+  double scale = 1.0; // For death shrinking animation
+  double opacity = 1.0; // For death fade animation
+  double originalScale = 1.0; // Store original scale
+  static const double deathAnimationDuration = 0.8; // seconds for death animation
+
+  // --- Misc ---
   Rect boundingBox = const Rect.fromLTWH(0, 0, 0, 0);
 
   AiSnakeData({

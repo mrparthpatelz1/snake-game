@@ -32,12 +32,16 @@ class FoodPainter extends PositionComponent {
   }
 
   void _renderFood(Canvas canvas, FoodModel food) {
-    // Base floating animation
-    final floatScale = 0.85 + 0.15 * (0.5 + 0.5 * math.sin(_animT * 4.0 + food.originalPosition.x * 0.01));
+    // Base floating animation (subtle for spawning food, more prominent for normal food)
+    final floatIntensity = food.isSpawning ? 0.05 : 0.15;
+    final floatScale = (1.0 - floatIntensity) + floatIntensity *
+        (0.5 + 0.5 * math.sin(_animT * 4.0 + food.originalPosition.x * 0.01));
 
-    // Apply consumption scaling and opacity
+    // Apply all scaling factors
     final totalScale = floatScale * food.scale;
     final radius = food.radius * totalScale;
+
+    if (radius <= 0) return; // Don't render if scale is 0
 
     // Create paint with animated opacity
     final baseColor = food.color.withOpacity(food.opacity);
@@ -50,9 +54,18 @@ class FoodPainter extends PositionComponent {
         stops: const [0.0, 1.0],
       ).createShader(Rect.fromCircle(center: food.position.toOffset(), radius: radius));
 
-    // Add consumption effect - glowing when being consumed
-    if (food.state == FoodState.consuming) {
-      _renderConsumptionEffect(canvas, food, radius);
+    // Add special effects based on state
+    switch (food.state) {
+      case FoodState.spawning:
+        _renderSpawnEffect(canvas, food, radius);
+        break;
+      case FoodState.consuming:
+        _renderConsumptionEffect(canvas, food, radius);
+        break;
+      case FoodState.normal:
+      case FoodState.consumed:
+      // No special effects needed
+        break;
     }
 
     // Draw the main food
@@ -61,6 +74,28 @@ class FoodPainter extends PositionComponent {
     // Add sparkle effect for larger food items during consumption
     if (food.state == FoodState.consuming && food.radius > 8.0) {
       _renderSparkleEffect(canvas, food, radius);
+    }
+
+    // Add pulsing glow for spawning large food
+    if (food.state == FoodState.spawning && food.radius > 8.0) {
+      _renderSpawnGlow(canvas, food, radius);
+    }
+  }
+
+  void _renderSpawnEffect(Canvas canvas, FoodModel food, double radius) {
+    // Add a subtle expanding ring effect during spawn
+    final spawnProgress = food.spawnProgress;
+
+    if (spawnProgress < 0.8) {
+      final ringRadius = radius + (spawnProgress * 15.0);
+      final ringOpacity = (0.8 - spawnProgress) * 0.3;
+
+      final ringPaint = Paint()
+        ..color = food.color.withOpacity(ringOpacity * food.opacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0;
+
+      canvas.drawCircle(food.position.toOffset(), ringRadius, ringPaint);
     }
   }
 
@@ -110,5 +145,23 @@ class FoodPainter extends PositionComponent {
 
       canvas.drawCircle(sparklePos, sparkleSize, sparklePaint);
     }
+  }
+
+  void _renderSpawnGlow(Canvas canvas, FoodModel food, double radius) {
+    // Gentle pulsing glow for spawning large food items
+    final pulseProgress = (math.sin(_animT * 6.0) + 1) * 0.5;
+    final glowRadius = radius * (1.0 + pulseProgress * 0.3);
+    final glowOpacity = 0.2 * (1 - food.spawnProgress) * pulseProgress;
+
+    final glowPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          food.color.withOpacity(glowOpacity),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 1.0],
+      ).createShader(Rect.fromCircle(center: food.position.toOffset(), radius: glowRadius));
+
+    canvas.drawCircle(food.position.toOffset(), glowRadius, glowPaint);
   }
 }

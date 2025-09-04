@@ -99,9 +99,8 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     if (isDead) return;
     isDead = true;
 
-    // CHANGED: Use new scatter system instead of direct spawning
-    final segmentPositions = bodySegments.map((s) => s.position).toList();
-    foodManager.scatterFoodFromDeadSnake(segmentPositions, position, maxFood: 25);
+    // Use the new scatterFoodFromSnake method for player death
+    foodManager.scatterFoodFromSnake(position, playerController.headRadius.value, bodySegments.length);
 
     final currentScore = playerController.foodScore.value;
     if (currentScore > _scoreService.getHighScore()) {
@@ -174,7 +173,7 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
         SlitherGame.playArea.bottomRight.toVector2()
     );
 
-    // Enhanced food consumption - NO NEW FOOD SPAWNING
+    // Enhanced food consumption with animation
     _checkAndConsumeFoodWithAnimation();
   }
 
@@ -182,7 +181,7 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     final eatDistSq = (playerController.headRadius.value * playerController.headRadius.value) + 500;
     final candidateFood = <FoodModel>[];
 
-    // Check only eatable food (not already being consumed)
+    // Check only eatable food (not already being consumed or spawning)
     for (final food in foodManager.eatableFoodList) {
       if (position.distanceToSquared(food.position) < eatDistSq) {
         candidateFood.add(food);
@@ -194,10 +193,10 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
       foodManager.startConsumingFood(food, position);
       _growSnake(food.growth);
 
-      // REMOVED: No longer spawn new food immediately
-      // foodManager.spawnFood(position); <- This was causing the food explosion
+      // Spawn new food to replace the one being consumed
+      foodManager.spawnFood(position);
 
-      // Optional: Add some visual feedback
+      // Optional: Add some visual feedback or sound effect here
       _addEatingEffect(food);
     }
   }
@@ -209,10 +208,8 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     // - Sound effects
     // - Score popup animations
 
-    // Reduced debug spam
-    if (food.growth > 1) {
-      print('Player consuming valuable food worth ${food.growth} points!');
-    }
+    // For now, just a simple debug print
+    print('Player consuming food worth ${food.growth} points!');
   }
 
   Vector2 _getPointOnPathAtDistance(double distance) {
@@ -242,15 +239,11 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
-
-    // Render body segments from back to front (so head appears on top)
     for (int i = bodySegments.length - 1; i >= 0; i--) {
       final segment = bodySegments[i];
       final color = playerController.skinColors[i % playerController.skinColors.length];
       _drawSegment(canvas, segment.position, playerController.bodyRadius.value * segment.scale, color);
     }
-
-    // Render head last (on top of body)
     canvas.save();
     canvas.rotate(headAngle + (pi) + _bobAngle);
     headSprite?.render(
@@ -267,9 +260,9 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     final Offset offset = Offset(segmentPosition.x - position.x, segmentPosition.y - position.y);
     final gradient = RadialGradient(
       center: Alignment.center,
-      // radius: 0.6,
-      colors: [color, color.withValues(alpha: 0.8)],
-      stops: const [0.6, 1.0],
+      radius: 0.6,
+      colors: [color.withOpacity(1.0), color.withOpacity(0.6)],
+      stops: const [0.5, 1.0],
     );
     final paint = Paint()
       ..shader = gradient.createShader(Rect.fromCircle(center: offset, radius: radius));

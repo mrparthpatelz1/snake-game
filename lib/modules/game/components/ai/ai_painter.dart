@@ -1,4 +1,4 @@
-// lib/modules/game/components/ai/ai_painter.dart
+import 'dart:math' as math;
 
 import 'package:flame/components.dart';
 import 'package:flame/extensions.dart';
@@ -18,74 +18,100 @@ class AiPainter extends Component with HasGameReference<SlitherGame> {
     super.render(canvas);
 
     final view = game.cameraComponent.visibleWorldRect;
-    final margin = 200.0;
+    final margin = 300.0;
     final drawRect = view.inflate(margin);
 
     int drawn = 0;
-    final segmentPaint = Paint();
+    final headPaint = Paint();
 
     for (final snake in aiManager.snakes) {
-      if (snake.isDead) continue;
       if (!drawRect.overlaps(snake.boundingBox)) continue;
 
       drawn++;
 
-      // FIXED: Render body segments FIRST (so they appear under the head)
-      for (int i = 1; i < snake.segmentCount; i++) { // Start from 1 to skip head
-        if (i - 1 < snake.bodySegments.length) {
-          final segPos = snake.bodySegments[i - 1].toOffset();
-          segmentPaint.color = snake.skinColors[i % snake.skinColors.length];
+      // Apply death animation scaling and opacity
+      final currentScale = snake.scale;
+      final currentOpacity = snake.opacity;
 
-          // Add gradient effect to body segments
-          final gradient = RadialGradient(
-            colors: [
-              segmentPaint.color,
-              segmentPaint.color.withOpacity(0.8),
-            ],
-            stops: const [0.6, 1.0],
-          );
+      // Skip rendering if completely invisible
+      if (currentOpacity <= 0.0 || currentScale <= 0.0) continue;
 
-          segmentPaint.shader = gradient.createShader(
-              Rect.fromCircle(center: segPos, radius: snake.bodyRadius)
-          );
+      // Paint cycling by segment index
+      for (int i = 0; i < snake.segmentCount; i++) {
+        Offset segPos;
+        double radius;
 
-          canvas.drawCircle(segPos, snake.bodyRadius, segmentPaint);
+        if (i == 0) {
+          // Always draw head from snake.position
+          segPos = snake.position.toOffset();
+          radius = snake.headRadius * currentScale; // Apply death animation scale
+          headPaint.color = snake.skinColors[0].withOpacity(currentOpacity);
+        } else if (i - 1 < snake.bodySegments.length) {
+          segPos = snake.bodySegments[i - 1].toOffset();
+          radius = snake.bodyRadius * currentScale; // Apply death animation scale
+          headPaint.color = snake.skinColors[i % snake.skinColors.length].withOpacity(currentOpacity);
+        } else {
+          continue; // Skip if segment doesn't exist
+        }
+
+        // Don't draw segments that are too small
+        if (radius > 0.5) {
+          canvas.drawCircle(segPos, radius, headPaint);
         }
       }
 
-      // FIXED: Render head LAST (so it appears on top of body)
-      final headPos = snake.position.toOffset();
-      segmentPaint.color = snake.skinColors[0]; // Head uses first color
-
-      // Special gradient for head to make it more prominent
-      final headGradient = RadialGradient(
-        colors: [
-          segmentPaint.color.withOpacity(1.0),
-          segmentPaint.color.withOpacity(0.7),
-        ],
-        stops: const [0.5, 1.0],
-      );
-
-      segmentPaint.shader = headGradient.createShader(
-          Rect.fromCircle(center: headPos, radius: snake.headRadius)
-      );
-
-      canvas.drawCircle(headPos, snake.headRadius, segmentPaint);
-
-      // Optional: Add a small highlight to the head for better visibility
-      final highlightPaint = Paint()
-        ..color = Colors.white.withOpacity(0.3)
-        ..style = PaintingStyle.fill;
-
-      canvas.drawCircle(
-          Offset(headPos.dx - snake.headRadius * 0.3, headPos.dy - snake.headRadius * 0.3),
-          snake.headRadius * 0.2,
-          highlightPaint
-      );
+      // Add death effect for dying snakes
+      if (snake.isDead && snake.deathAnimationTimer > 0) {
+        _renderDeathEffect(canvas, snake);
+      }
     }
 
     if (drawn > 0) {
-      debugPrint("Rendering AI snakes: $drawn (head over body)");
+      debugPrint("Rendering snakes: $drawn");
+    }
+  }
+
+  void _renderDeathEffect(Canvas canvas, AiSnakeData snake) {
+    // Create a fading ring effect around the dying snake
+    final progress = 1.0 - (snake.deathAnimationTimer / AiSnakeData.deathAnimationDuration);
+    final ringRadius = snake.headRadius * (1.0 + progress * 2.0);
+    final ringOpacity = (1.0 - progress) * 0.3 * snake.opacity;
+
+    if (ringOpacity > 0.01) {
+      final ringPaint = Paint()
+        ..color = Colors.white.withOpacity(ringOpacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.0;
+
+      canvas.drawCircle(snake.position.toOffset(), ringRadius, ringPaint);
+    }
+
+    // Add some particle-like effects
+    _renderDeathParticles(canvas, snake, progress);
+  }
+
+  void _renderDeathParticles(Canvas canvas, AiSnakeData snake, double progress) {
+    final particleCount = 8;
+    final maxParticleDistance = snake.headRadius * 3;
+
+    for (int i = 0; i < particleCount; i++) {
+      final angle = (i / particleCount) * 2 * math.pi;
+      final distance = progress * maxParticleDistance;
+
+      final particleX = snake.position.x + (distance * math.cos(angle));
+      final particleY = snake.position.y + (distance * math.sin(angle));
+      final particlePos = Offset(particleX, particleY);
+
+      final particleSize = (1.0 - progress) * 3.0;
+      final particleOpacity = (1.0 - progress) * snake.opacity;
+
+      if (particleSize > 0.5 && particleOpacity > 0.01) {
+        final particlePaint = Paint()
+          ..color = snake.skinColors[0].withOpacity(particleOpacity)
+          ..style = PaintingStyle.fill;
+
+        canvas.drawCircle(particlePos, particleSize, particlePaint);
+      }
     }
   }
 }

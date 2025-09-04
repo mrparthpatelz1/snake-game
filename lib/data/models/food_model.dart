@@ -4,6 +4,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
 enum FoodState {
+  spawning,   // NEW: Just spawned - growing from 0 to full size
   normal,     // Normal state, can be eaten
   consuming,  // Being consumed - animating towards snake
   consumed    // Fully consumed - ready for removal
@@ -17,22 +18,31 @@ class FoodModel {
   final int growth;
 
   // Animation properties
-  FoodState state = FoodState.normal;
+  FoodState state = FoodState.spawning; // Start in spawning state
   Vector2? targetPosition; // Position to animate towards (snake head)
   double consumeProgress = 0.0; // 0.0 = start, 1.0 = fully consumed
-  double scale = 1.0; // For scaling animation
+  double scale = 0.0; // Start at 0 for spawn animation
   double opacity = 1.0; // For fade out effect
+  double spawnProgress = 0.0; // 0.0 = just spawned, 1.0 = fully spawned
 
   // Animation timing
   static const double consumeAnimationDuration = 0.4; // seconds
+  static const double spawnAnimationDuration = 0.3; // seconds for spawn animation
 
   FoodModel({
     required Vector2 position,
     required this.color,
     required this.radius,
     required this.growth,
+    bool skipSpawnAnimation = false, // Allow skipping spawn animation
   }) : originalPosition = position.clone(),
-        position = position.clone();
+        position = position.clone() {
+    if (skipSpawnAnimation) {
+      state = FoodState.normal;
+      scale = 1.0;
+      spawnProgress = 1.0;
+    }
+  }
 
   // Start the consumption animation towards a target position (snake head)
   void startConsumption(Vector2 target) {
@@ -43,9 +53,40 @@ class FoodModel {
     consumeProgress = 0.0;
   }
 
-  // Update the animation
-  void updateConsumption(double dt) {
-    if (state != FoodState.consuming) return;
+  // Update all animations
+  void updateAnimations(double dt) {
+    switch (state) {
+      case FoodState.spawning:
+        _updateSpawnAnimation(dt);
+        break;
+      case FoodState.consuming:
+        _updateConsumption(dt);
+        break;
+      case FoodState.normal:
+      case FoodState.consumed:
+      // No animation needed
+        break;
+    }
+  }
+
+  // Update spawn animation
+  void _updateSpawnAnimation(double dt) {
+    spawnProgress += dt / spawnAnimationDuration;
+
+    if (spawnProgress >= 1.0) {
+      spawnProgress = 1.0;
+      state = FoodState.normal;
+      scale = 1.0;
+      return;
+    }
+
+    // Smooth bounce-in effect
+    double easedProgress = _easeOutBack(spawnProgress);
+    scale = easedProgress;
+  }
+
+  // Update the consumption animation
+  void _updateConsumption(double dt) {
     if (targetPosition == null) return;
 
     // Increase progress
@@ -81,16 +122,26 @@ class FoodModel {
     );
   }
 
-  // Smooth easing function
+  // Smooth easing function for consumption
   double _easeInOutCubic(double t) {
     return t < 0.5 ? 4 * t * t * t : 1 - pow(-2 * t + 2, 3) / 2;
+  }
+
+  // Bounce-in easing for spawn animation
+  double _easeOutBack(double t) {
+    const c1 = 1.70158;
+    const c3 = c1 + 1;
+    return 1 + c3 * pow(t - 1, 3) + c1 * pow(t - 1, 2);
   }
 
   // Check if the food is ready to be removed
   bool get shouldBeRemoved => state == FoodState.consumed;
 
-  // Check if the food can be eaten
+  // Check if the food can be eaten (fully spawned and not being consumed)
   bool get canBeEaten => state == FoodState.normal;
+
+  // Check if the food is currently spawning
+  bool get isSpawning => state == FoodState.spawning;
 
   // Reset the food to normal state (if needed)
   void reset() {
@@ -98,6 +149,7 @@ class FoodModel {
     position = originalPosition.clone();
     targetPosition = null;
     consumeProgress = 0.0;
+    spawnProgress = 1.0;
     scale = 1.0;
     opacity = 1.0;
   }

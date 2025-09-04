@@ -33,6 +33,7 @@ class SlitherGame extends FlameGame with DragCallbacks {
   late final CameraComponent cameraComponent;
   late final AiPainter aiPainter;
   AiSnakeData? snakeThatKilledPlayer;
+  bool _gameInitialized = false; // Track if game has been fully initialized
 
   JoystickComponent? joystick;
   static int _frameCount = 0;
@@ -118,14 +119,23 @@ class SlitherGame extends FlameGame with DragCallbacks {
     final pauseButton = PauseButton(position: Vector2(size.x - 70, 50));
     final minimap = Minimap(player: player, aiManager: aiManager);
     cameraComponent.viewport.addAll([boostButton, pauseButton, minimap]);
+
+    // Initialize food immediately after everything is set up
+    _initializeFood();
+  }
+
+  void _initializeFood() {
+    // Initialize food immediately when the game starts
+    foodManager.initialize(player.position);
+    _gameInitialized = true;
+    print('Game initialized with food spawned at start');
   }
 
   void revivePlayer() {
     overlays.remove('revive');
 
     if (snakeThatKilledPlayer != null) {
-      aiManager.killSnakeAndScatterFood(snakeThatKilledPlayer!);
-      aiManager.spawnNewSnake();
+      // The death animation will handle food scattering automatically
       snakeThatKilledPlayer = null;
     }
 
@@ -149,11 +159,14 @@ class SlitherGame extends FlameGame with DragCallbacks {
   void showGameOver() {
     overlays.remove('revive');
 
-    // for (final segment in player.bodySegments) {
-    //   foodManager.spawnFoodAt(segment.position);
-    // }
-    player.removeFromParent();
+    // Scatter food from player death using the new method
+    foodManager.scatterFoodFromSnake(
+        player.position,
+        playerController.headRadius.value,
+        player.bodySegments.length
+    );
 
+    player.removeFromParent();
     overlays.add('gameOver');
   }
 
@@ -161,7 +174,10 @@ class SlitherGame extends FlameGame with DragCallbacks {
   void update(double dt) {
     super.update(dt);
 
-    foodManager.update(dt, player.position);
+    // Only update food and game logic after initialization
+    if (_gameInitialized) {
+      foodManager.update(dt, player.position);
+    }
 
     if (joystick != null && joystick!.intensity > 0) {
       playerController.targetDirection = joystick!.delta.normalized();
@@ -170,7 +186,8 @@ class SlitherGame extends FlameGame with DragCallbacks {
     _updateCount++;
     if (_updateCount % 3600 == 0) {
       final aiStats = 'AI: ${aiManager.aliveSnakeCount}/${aiManager.totalSnakeCount}';
-      print('Game update running. Update: $_updateCount | $aiStats');
+      final foodStats = 'Food: ${foodManager.foodList.length}';
+      print('Game update running. Update: $_updateCount | $aiStats | $foodStats');
     }
 
     // Enhanced collision detection - Player vs AI only
@@ -298,11 +315,11 @@ class SlitherGame extends FlameGame with DragCallbacks {
       }
     }
 
-    // Process killed snakes
+    // Process killed snakes - now they die with animation
     for (final snake in snakesToKill) {
       playerController.kills.value++;
-      aiManager.killSnakeAndScatterFood(snake);
-      aiManager.spawnNewSnake();
+      snake.isDead = true; // This will trigger death animation in AiManager
+      aiManager.spawnNewSnake(); // Spawn replacement
     }
 
     if (_frameCount % 300 == 0 && checkedSnakes > 0) {
