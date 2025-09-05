@@ -22,7 +22,7 @@ class AiPainter extends Component with HasGameReference<SlitherGame> {
     final drawRect = view.inflate(margin);
 
     int drawn = 0;
-    final headPaint = Paint();
+    final segmentPaint = Paint();
 
     for (final snake in aiManager.snakes) {
       if (!drawRect.overlaps(snake.boundingBox)) continue;
@@ -36,28 +36,49 @@ class AiPainter extends Component with HasGameReference<SlitherGame> {
       // Skip rendering if completely invisible
       if (currentOpacity <= 0.0 || currentScale <= 0.0) continue;
 
-      // Paint cycling by segment index
-      for (int i = 0; i < snake.segmentCount; i++) {
-        Offset segPos;
-        double radius;
+      // FIXED: Render body segments first (from tail to neck)
+      for (int i = snake.segmentCount - 1; i >= 1; i--) {
+        if (i - 1 < snake.bodySegments.length) {
+          final segPos = snake.bodySegments[i - 1].toOffset();
+          final radius = snake.bodyRadius * currentScale;
 
-        if (i == 0) {
-          // Always draw head from snake.position
-          segPos = snake.position.toOffset();
-          radius = snake.headRadius * currentScale; // Apply death animation scale
-          headPaint.color = snake.skinColors[0].withOpacity(currentOpacity);
-        } else if (i - 1 < snake.bodySegments.length) {
-          segPos = snake.bodySegments[i - 1].toOffset();
-          radius = snake.bodyRadius * currentScale; // Apply death animation scale
-          headPaint.color = snake.skinColors[i % snake.skinColors.length].withOpacity(currentOpacity);
-        } else {
-          continue; // Skip if segment doesn't exist
+          // Don't draw segments that are too small
+          if (radius > 0.5) {
+            segmentPaint.color = snake.skinColors[i % snake.skinColors.length].withOpacity(currentOpacity);
+
+            // Add boost glow effect for boosting snakes
+            if (snake.isBoosting) {
+              _renderBoostGlow(canvas, segPos, radius, snake.skinColors[i % snake.skinColors.length], currentOpacity);
+            }
+
+            canvas.drawCircle(segPos, radius, segmentPaint);
+          }
+        }
+      }
+
+      // FIXED: Render head LAST (on top of body segments)
+      final headPos = snake.position.toOffset();
+      final headRadius = snake.headRadius * currentScale;
+
+      if (headRadius > 0.5) {
+        // Add boost glow for head if boosting
+        if (snake.isBoosting) {
+          _renderHeadBoostGlow(canvas, headPos, headRadius, snake.skinColors[0], currentOpacity);
         }
 
-        // Don't draw segments that are too small
-        if (radius > 0.5) {
-          canvas.drawCircle(segPos, radius, headPaint);
-        }
+        // Draw head sprite
+        canvas.save();
+        canvas.translate(headPos.dx, headPos.dy);
+        canvas.rotate(snake.angle + -math.pi /2); // Adjust rotation as needed
+        canvas.scale(currentScale); // Apply death animation scaling
+
+        snake.headSprite.render(
+          canvas,
+          position: Vector2.zero(),
+          size: Vector2.all(headRadius * 2),
+          anchor: Anchor.center,
+        );
+        canvas.restore();
       }
 
       // Add death effect for dying snakes
@@ -66,9 +87,40 @@ class AiPainter extends Component with HasGameReference<SlitherGame> {
       }
     }
 
-    if (drawn > 0) {
-      debugPrint("Rendering snakes: $drawn");
+    if (drawn > 0 && game.debugMode) {
+      debugPrint("Rendering AI snakes: $drawn");
     }
+  }
+
+  // NEW: Render boost glow effect for body segments
+  void _renderBoostGlow(Canvas canvas, Offset position, double radius, Color color, double opacity) {
+    final glowRadius = radius * 1.3;
+    final glowPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          color.withOpacity(0.4 * opacity),
+          color.withOpacity(0.1 * opacity),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.7, 1.0],
+      ).createShader(Rect.fromCircle(center: position, radius: glowRadius));
+
+    canvas.drawCircle(position, glowRadius, glowPaint);
+  }
+
+  // NEW: Render boost glow effect for head
+  void _renderHeadBoostGlow(Canvas canvas, Offset position, double radius, Color color, double opacity) {
+    final glowRadius = radius * 1.5;
+    final glowPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          color.withOpacity(0.3 * opacity),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 1.0],
+      ).createShader(Rect.fromCircle(center: position, radius: glowRadius));
+
+    canvas.drawCircle(position, glowRadius, glowPaint);
   }
 
   void _renderDeathEffect(Canvas canvas, AiSnakeData snake) {

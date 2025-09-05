@@ -11,12 +11,10 @@ class ReviveController extends GetxController with GetSingleTickerProviderStateM
   final SlitherGame game;
   ReviveController({required this.game});
 
-
   final AdService _adService = Get.find<AdService>();
 
   late final Timer _timer;
   late final AnimationController animationController;
-
 
   final RxInt countdown = 10.obs;
 
@@ -24,12 +22,10 @@ class ReviveController extends GetxController with GetSingleTickerProviderStateM
   void onInit() {
     super.onInit();
 
-
     animationController = AnimationController(
       vsync: this,
-      duration: Duration(seconds: countdown.value ),
+      duration: Duration(seconds: countdown.value),
     )..reverse(from: 1.0);
-
 
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (countdown.value > 0) {
@@ -49,29 +45,37 @@ class ReviveController extends GetxController with GetSingleTickerProviderStateM
     super.onClose();
   }
 
-  // --- UI Actions (no change here) ---
+  // FIXED: Proper revive handling
   void onRevive() {
-    // When reviving, we must cancel the timer and dispose the controller
-    // before the game continues.
     _timer.cancel();
+    animationController.stop();
 
 
     _adService.showRewardedAd(
       onReward: () {
-        game.revivePlayer();
+          game.revivePlayer();
       },
     );
   }
 
-  void onNext() {
-    _timer.cancel();
+  // FIXED: Handle revive failure gracefully
+  void _handleReviveFailure() {
+    print('Revive failed, showing game over...');
+    Get.delete<ReviveController>();
+    game.overlays.remove('revive');
     game.showGameOver();
   }
 
-
+  void onNext() {
+    _timer.cancel();
+    Get.delete<ReviveController>();
+    game.showGameOver();
+  }
 
   void onHome() {
     _timer.cancel();
+    Get.delete<ReviveController>();
+    game.overlays.remove('revive');
     game.resumeEngine();
     Get.offAllNamed(Routes.HOME);
   }

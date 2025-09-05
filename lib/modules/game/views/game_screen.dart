@@ -6,6 +6,7 @@ import 'package:flame/game.dart';
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Add this for haptics
 import 'package:get/get.dart';
 import 'package:newer_version_snake/modules/game/views/pause_menu.dart';
 import 'package:newer_version_snake/modules/game/views/revive_overlay.dart';
@@ -75,11 +76,11 @@ class SlitherGame extends FlameGame with DragCallbacks {
     cameraComponent = CameraComponent()..debugMode = false;
     player = PlayerComponent(foodManager: foodManager)..position = Vector2.zero();
 
-    // Initialize AI manager with more snakes for better gameplay
+    // UPDATED: Initialize AI manager with reduced snake count (20 instead of 30)
     aiManager = AiManager(
       foodManager: foodManager,
       player: player,
-      numberOfSnakes: 30, // Increased initial count
+      numberOfSnakes: 20, // Reduced from 30
     );
 
     final foodPainter = FoodPainter(
@@ -227,7 +228,7 @@ class SlitherGame extends FlameGame with DragCallbacks {
     super.onDragUpdate(event);
   }
 
-  // Optimized collision detection - only check Player vs AI
+  // IMPROVED: Optimized collision detection with haptic feedback
   void _checkPlayerVsAiCollisions() {
     _collisionCallCount++;
 
@@ -270,16 +271,19 @@ class SlitherGame extends FlameGame with DragCallbacks {
 
       if (headToHeadDistance <= requiredHeadDistance) {
         if (playerHeadRadius > snake.headRadius + 1.0) {
-          // Player wins
+          // Player wins - ADD HAPTIC FEEDBACK
+          HapticFeedback.mediumImpact();
           print('Player wins H2H: $playerHeadRadius vs ${snake.headRadius}');
           snakesToKill.add(snake);
+          player.onAiSnakeKilled(); // Trigger haptic in player component
         } else if (playerHeadRadius < snake.headRadius - 1.0) {
-          // AI wins
+          // AI wins - DEATH HAPTIC is handled in player.die()
           print('AI wins H2H: $playerHeadRadius vs ${snake.headRadius}');
           handlePlayerDeath(snake);
           return;
         } else {
           // Equal size - both die
+          HapticFeedback.heavyImpact(); // Different haptic for mutual destruction
           print('Equal H2H — both die at r=$playerHeadRadius');
           snakesToKill.add(snake);
           handlePlayerDeath(snake);
@@ -296,6 +300,7 @@ class SlitherGame extends FlameGame with DragCallbacks {
 
         if (bodyDistance <= requiredBodyDistance) {
           print('Player head hit AI body[$i]: d=${bodyDistance.toStringAsFixed(1)} <= ${requiredBodyDistance.toStringAsFixed(1)}');
+          // DEATH HAPTIC is handled in player.die()
           handlePlayerDeath(snake);
           return;
         }
@@ -308,8 +313,11 @@ class SlitherGame extends FlameGame with DragCallbacks {
         final requiredBodyDistance = snake.headRadius + playerBodyRadius;
 
         if (bodyDistance <= requiredBodyDistance) {
+          // Player wins - ADD HAPTIC FEEDBACK
+          HapticFeedback.mediumImpact();
           print('AI head hit player body[$i]: d=${bodyDistance.toStringAsFixed(1)} <= ${requiredBodyDistance.toStringAsFixed(1)} (AI dies)');
           snakesToKill.add(snake);
+          player.onAiSnakeKilled(); // Trigger haptic in player component
           break;
         }
       }

@@ -5,6 +5,7 @@ import 'package:flame/components.dart';
 import 'package:flame/extensions.dart';
 import 'package:flame/collisions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Add this for haptics
 import 'package:get/get.dart';
 import '../../../../data/models/food_model.dart';
 import '../../../../data/service/score_service.dart';
@@ -99,6 +100,9 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     if (isDead) return;
     isDead = true;
 
+    // Add haptic feedback for player death
+    HapticFeedback.heavyImpact();
+
     // Use the new scatterFoodFromSnake method for player death
     foodManager.scatterFoodFromSnake(position, playerController.headRadius.value, bodySegments.length);
 
@@ -112,6 +116,11 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
 
   void revive() {
     isDead = false;
+  }
+
+  // Method to handle AI snake kill with haptic feedback
+  void onAiSnakeKilled() {
+    HapticFeedback.lightImpact();
   }
 
   @override
@@ -148,12 +157,12 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
       headAngle += rotationAmount * angleDiff.sign;
     }
 
-    // NEW: Improved path-following with tighter spacing
-    if (_path.isEmpty || position.distanceTo(_path.first) > 2.0) { // Reduced from 4.0 to 2.0
+    // Improved path-following with tighter spacing
+    if (_path.isEmpty || position.distanceTo(_path.first) > 2.0) {
       _path.insert(0, position.clone());
     }
 
-    // NEW: Dynamic segment spacing based on head radius and boost state
+    // Dynamic segment spacing based on head radius and boost state
     final dynamicSpacing = _calculateDynamicSpacing();
     final maxPathLength = (bodySegments.length * (dynamicSpacing / 2)).round() + 1;
     if (_path.length > maxPathLength) {
@@ -166,9 +175,9 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
         segment.scale = min(1.0, segment.scale + dt * _growthSpeed);
       }
 
-      // NEW: Use dynamic spacing for better attachment
+      // Use dynamic spacing for better attachment
       final targetPoint = _getPointOnPathAtDistance((i + 1) * dynamicSpacing);
-      segment.position.lerp(targetPoint, 1 - exp(-30 * dt)); // Increased lerp speed from 25 to 30
+      segment.position.lerp(targetPoint, 1 - exp(-30 * dt));
     }
 
     position.clamp(
@@ -180,9 +189,9 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     _checkAndConsumeFoodWithAnimation();
   }
 
-  // NEW: Calculate dynamic segment spacing for better head/body attachment
+  // Calculate dynamic segment spacing for better head/body attachment
   double _calculateDynamicSpacing() {
-    final baseSpacing = playerController.headRadius.value * 0.5; // Reduced from 0.7 to 0.5
+    final baseSpacing = playerController.headRadius.value * 0.5;
     // When boosting, reduce spacing even more for tighter body
     return playerController.isBoosting.value ? baseSpacing * 0.8 : baseSpacing;
   }
@@ -249,11 +258,28 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+
+    final canBoost = playerController.isBoosting.value && bodySegments.length > _minLength;
+
+    // Render body segments from back to front (EXACTLY like AI snakes)
     for (int i = bodySegments.length - 1; i >= 0; i--) {
       final segment = bodySegments[i];
       final color = playerController.skinColors[i % playerController.skinColors.length];
+
+      // FIXED: Use EXACT same boost glow rendering as AI snakes
+      if (canBoost) {
+        _renderBoostGlow(canvas, segment.position, playerController.bodyRadius.value * segment.scale, color, 1.0);
+      }
+
       _drawSegment(canvas, segment.position, playerController.bodyRadius.value * segment.scale, color);
     }
+
+    // FIXED: Add boost glow around head EXACTLY like AI snakes
+    if (canBoost) {
+      _renderHeadBoostGlow(canvas, position, playerController.headRadius.value, playerController.skinColors[0], 1.0);
+    }
+
+    // Render head sprite on top of everything
     canvas.save();
     canvas.rotate(headAngle + (pi) + _bobAngle);
     headSprite?.render(
@@ -263,6 +289,38 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
         anchor: Anchor.center
     );
     canvas.restore();
+  }
+
+  // FIXED: EXACT same boost glow effect as AI snakes
+  void _renderBoostGlow(Canvas canvas, Vector2 segmentPosition, double radius, Color color, double opacity) {
+    final Offset offset = Offset(segmentPosition.x - position.x, segmentPosition.y - position.y);
+    final glowRadius = radius * 1.3;
+    final glowPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          color.withOpacity(0.4 * opacity),
+          color.withOpacity(0.1 * opacity),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.7, 1.0],
+      ).createShader(Rect.fromCircle(center: offset, radius: glowRadius));
+
+    canvas.drawCircle(offset, glowRadius, glowPaint);
+  }
+
+  // FIXED: EXACT same head boost glow as AI snakes
+  void _renderHeadBoostGlow(Canvas canvas, Vector2 headPosition, double radius, Color color, double opacity) {
+    final glowRadius = radius * 1.5;
+    final glowPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          color.withOpacity(0.3 * opacity),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: glowRadius));
+
+    canvas.drawCircle(Offset.zero, glowRadius, glowPaint);
   }
 
   void _drawSegment(Canvas canvas, Vector2 segmentPosition, double radius, Color color) {

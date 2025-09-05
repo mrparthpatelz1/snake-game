@@ -3,6 +3,7 @@
 import 'package:flame/camera.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../../routes/app_routes.dart';
 import '../components/world/image_background.dart';
@@ -47,6 +48,7 @@ class HomeScreen extends GetView<HomeController> {
             child: GestureDetector(
               onTap: () {
                 // TODO: Implement settings functionality
+                HapticFeedback.lightImpact();
                 Get.snackbar('Settings', 'Settings button pressed!');
               },
               child: Image.asset('assets/images/Settings.png', width: 60),

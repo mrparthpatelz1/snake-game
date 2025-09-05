@@ -38,7 +38,7 @@ class AdService extends GetxService {
     );
   }
 
-  // Method to show the ad and handle the reward
+  // FIXED: Method to show the ad and handle the reward properly
   void showRewardedAd({required VoidCallback onReward}) {
     if (!isRewardedAdReady.value || _rewardedAd == null) {
       debugPrint('Tried to show ad but it was not ready.');
@@ -46,10 +46,20 @@ class AdService extends GetxService {
       return;
     }
 
+    // Track if reward was earned to handle proper game resume
+    bool rewardEarned = false;
+
     _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {
         ad.dispose();
         isRewardedAdReady.value = false;
+        debugPrint('Ad dismissed. Reward earned: $rewardEarned');
+
+        // FIXED: Only call onReward if user actually earned the reward
+        if (rewardEarned) {
+          onReward();
+        }
+
         loadRewardedAd(); // Pre-load the next ad
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
@@ -63,9 +73,9 @@ class AdService extends GetxService {
     _rewardedAd!.show(
       onUserEarnedReward: (ad, reward) {
         debugPrint('User earned reward: ${reward.amount} ${reward.type}');
-        // --- This is where the magic happens ---
-        // Call the function that was passed in (e.g., revivePlayer)
-        onReward();
+        rewardEarned = true;
+        // Note: Don't call onReward here immediately, wait for ad dismissal
+        // This ensures proper timing and prevents multiple calls
       },
     );
     _rewardedAd = null;

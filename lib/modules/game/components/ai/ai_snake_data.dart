@@ -52,6 +52,12 @@ class AiSnakeData {
   double originalScale = 1.0; // Store original scale
   static const double deathAnimationDuration = 0.8; // seconds for death animation
 
+  // NEW: Growth system matching player snake
+  int foodScore = 0;       // Total food collected
+  final int foodPerSegment = 5;        // Every 5 food -> +1 segment
+  final int foodPerRadius = 1000;      // Every 1000 food -> +1 px radius
+  int initialSegmentCount = 10;        // Starting segment count
+
   // --- Misc ---
   Rect boundingBox = const Rect.fromLTWH(0, 0, 0, 0);
 
@@ -77,7 +83,45 @@ class AiSnakeData {
       targetDirection.normalize();
     }
     angle = targetDirection.screenAngle();
+
+    // NEW: Initialize growth system
+    initialSegmentCount = segmentCount;
+    foodScore = 0;
   }
+
+  // NEW: Growth method matching player snake
+  void growFromFood(int foodValue) {
+    foodScore += foodValue;
+
+    // Calculate new segment count based on food score
+    final newSegmentCount = initialSegmentCount + (foodScore ~/ foodPerSegment);
+
+    // Add new segments if needed
+    if (newSegmentCount > segmentCount) {
+      final segmentsToAdd = newSegmentCount - segmentCount;
+      for (int i = 0; i < segmentsToAdd; i++) {
+        if (bodySegments.isNotEmpty) {
+          bodySegments.add(bodySegments.last.clone());
+        } else {
+          bodySegments.add(position.clone());
+        }
+      }
+      segmentCount = newSegmentCount;
+    }
+
+    // Calculate new radius based on food score
+    final newRadius = minRadius + (foodScore / foodPerRadius);
+    headRadius = newRadius.clamp(minRadius, maxRadius);
+    bodyRadius = headRadius - 1.0;
+
+    print('AI Snake grew: foodScore=$foodScore, segments=$segmentCount, radius=${headRadius.toStringAsFixed(1)}');
+  }
+
+  // NEW: Get current food score for debugging
+  int get currentFoodScore => foodScore;
+
+  // NEW: Get growth progress for debugging
+  double get growthProgress => foodScore / foodPerRadius;
 
   /// Convenience to (re)compute bounding box from head + segments
   void rebuildBoundingBox() {
