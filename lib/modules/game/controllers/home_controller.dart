@@ -5,6 +5,8 @@ import 'package:get/get.dart';
 import 'package:get/get_state_manager/src/simple/get_controllers.dart';
 
 import '../../../data/service/score_service.dart';
+import '../home/settings/settings_controller.dart';
+import '../home/settings/settings_overlay.dart';
 
 class HomeController extends GetxController {
   // A controller to manage the text input for the nickname.
@@ -21,6 +23,11 @@ class HomeController extends GetxController {
     highScore.value = _scoreService.getHighScore();
   }
 
+  // --- NEW METHOD ---
+  void openSettings() {
+    Get.put(SettingsController());
+    Get.dialog(const SettingsOverlay());
+  }
 
   @override
   void onClose() {

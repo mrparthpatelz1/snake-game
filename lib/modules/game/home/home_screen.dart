@@ -47,9 +47,7 @@ class HomeScreen extends GetView<HomeController> {
             left: 16,
             child: GestureDetector(
               onTap: () {
-                // TODO: Implement settings functionality
-                HapticFeedback.lightImpact();
-                Get.snackbar('Settings', 'Settings button pressed!');
+                controller.openSettings();
               },
               child: Image.asset('assets/images/Settings.png', width: 60),
             ),

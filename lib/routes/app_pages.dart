@@ -4,6 +4,8 @@ import '../modules/game/customization/customization_screen.dart';
 import '../modules/game/game_bindings.dart';
 import '../modules/game/home/home_bindings.dart';
 import '../modules/game/home/home_screen.dart';
+import '../modules/game/home/settings/settings_bindings.dart';
+// import '../modules/game/home/settings/settings_screen.dart';
 import '../modules/game/views/game_screen.dart';
 import 'app_routes.dart';
 
@@ -29,5 +31,10 @@ class AppPages {
       page: () => const CustomizationScreen(),
       binding: CustomizationBinding(),
     ),
+    // GetPage(
+    //   name: Paths.SETTINGS,
+    //   page: () => const SettingsScreen(),
+    //   binding: SettingsBinding(),
+    // ),
   ];
 }
