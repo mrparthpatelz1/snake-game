@@ -48,8 +48,8 @@ class PlayerController extends GetxController {
   // --- Snake size ---
   final RxDouble headRadius = 10.0.obs;
   final RxDouble bodyRadius = 10.0.obs;
-  final double maxRadius = 35.0;
-  final double minRadius = 10.0;
+  final double maxRadius = 50.0;
+  final double minRadius = 16.0;
 
   // --- Speed ---
   final double baseSpeed = 150.0;

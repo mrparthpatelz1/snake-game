@@ -15,9 +15,20 @@ class FoodManager {
   int _updateCounter = 0;
   bool _initialFoodSpawned = false;
 
+  // IMPROVED: More vibrant food colors with better variety
   final List<Color> _foodColors = [
-    Colors.redAccent, Colors.greenAccent, Colors.blueAccent,
-    Colors.purpleAccent, Colors.orangeAccent, Colors.cyanAccent, Colors.pinkAccent,
+    Colors.redAccent.shade400,
+    Colors.greenAccent.shade400,
+    Colors.blueAccent.shade400,
+    Colors.purpleAccent.shade400,
+    Colors.orangeAccent.shade400,
+    Colors.cyanAccent.shade400,
+    Colors.pinkAccent.shade400,
+    Colors.yellowAccent.shade700,
+    Colors.tealAccent.shade400,
+    Colors.indigoAccent.shade400,
+    Colors.limeAccent.shade400,
+    Colors.amberAccent.shade400,
   ];
 
   FoodManager({
@@ -80,8 +91,8 @@ class FoodManager {
     final x = playerPosition.x + _random.nextDouble() * spawnRadius * 2 - spawnRadius;
     final y = playerPosition.y + _random.nextDouble() * spawnRadius * 2 - spawnRadius;
 
-    final clampedX = x.clamp(worldBounds.left + 14.0, worldBounds.right - 14.0);
-    final clampedY = y.clamp(worldBounds.top + 14.0, worldBounds.bottom - 14.0);
+    final clampedX = x.clamp(worldBounds.left + 20.0, worldBounds.right - 20.0);
+    final clampedY = y.clamp(worldBounds.top + 20.0, worldBounds.bottom - 20.0);
     final position = Vector2(clampedX, clampedY);
 
     final color = _foodColors[_random.nextInt(_foodColors.length)];
@@ -90,14 +101,15 @@ class FoodManager {
     double radius;
     int growth;
 
+    // IMPROVED: Increased sizes for all food types
     if (rand < 0.70) {
-      radius = 6.0;
+      radius = 10.0;  // Increased from 6.0
       growth = 1;
     } else if (rand < 0.90) {
-      radius = 10.0;
+      radius = 16.0;  // Increased from 10.0
       growth = 3;
     } else {
-      radius = 14.0;
+      radius = 22.0;  // Increased from 14.0
       growth = 5;
     }
 
@@ -111,7 +123,7 @@ class FoodManager {
 
   void spawnFoodAt(Vector2 position) {
     final color = _foodColors[_random.nextInt(_foodColors.length)];
-    const radius = 6.0;
+    const radius = 10.0;  // Increased from 6.0
     const growth = 1;
 
     foodList.add(FoodModel(
@@ -150,8 +162,8 @@ class FoodManager {
         final foodData = _getSlitherStyleFoodSizeImproved(snakeHeadRadius, i, totalPositions);
 
         // Clamp to world bounds
-        foodPosition.x = foodPosition.x.clamp(worldBounds.left + 14.0, worldBounds.right - 14.0);
-        foodPosition.y = foodPosition.y.clamp(worldBounds.top + 14.0, worldBounds.bottom - 14.0);
+        foodPosition.x = foodPosition.x.clamp(worldBounds.left + 20.0, worldBounds.right - 20.0);
+        foodPosition.y = foodPosition.y.clamp(worldBounds.top + 20.0, worldBounds.bottom - 20.0);
 
         final color = _foodColors[_random.nextInt(_foodColors.length)];
 
@@ -210,7 +222,7 @@ class FoodManager {
     }
   }
 
-  // IMPROVED: Get slither.io style food size with better distribution
+  // IMPROVED: Get slither.io style food size with better distribution and increased sizes
   Map<String, dynamic> _getSlitherStyleFoodSizeImproved(double snakeHeadRadius, int segmentIndex, int totalSegments) {
     // Food size decreases from head to tail, but not linearly
     final positionFactor = 1.0 - (segmentIndex / totalSegments); // 1.0 at head, 0.0 at tail
@@ -218,33 +230,33 @@ class FoodManager {
 
     final sizeRoll = _random.nextDouble();
 
-    // Head area (first 25% of segments) - premium food
+    // Head area (first 25% of segments) - premium food with increased sizes
     if (positionFactor > 0.75) {
       if (snakeHeadRadius > 25) {
-        if (sizeRoll < 0.4) return {'radius': 14.0, 'growth': 5}; // Large food
-        if (sizeRoll < 0.7) return {'radius': 10.0, 'growth': 3}; // Medium food
-        return {'radius': 6.0, 'growth': 1}; // Small food
+        if (sizeRoll < 0.4) return {'radius': 22.0, 'growth': 5}; // Large food (increased)
+        if (sizeRoll < 0.7) return {'radius': 16.0, 'growth': 3}; // Medium food (increased)
+        return {'radius': 10.0, 'growth': 1}; // Small food (increased)
       } else {
-        if (sizeRoll < 0.25) return {'radius': 14.0, 'growth': 5}; // Large food
-        if (sizeRoll < 0.55) return {'radius': 10.0, 'growth': 3}; // Medium food
-        return {'radius': 6.0, 'growth': 1}; // Small food
+        if (sizeRoll < 0.25) return {'radius': 22.0, 'growth': 5}; // Large food
+        if (sizeRoll < 0.55) return {'radius': 16.0, 'growth': 3}; // Medium food
+        return {'radius': 10.0, 'growth': 1}; // Small food
       }
     }
-    // Body area (middle 50% of segments) - mixed food
+    // Body area (middle 50% of segments) - mixed food with increased sizes
     else if (positionFactor > 0.25) {
       if (snakeHeadRadius > 20) {
-        if (sizeRoll < 0.2) return {'radius': 14.0, 'growth': 5}; // Large food
-        if (sizeRoll < 0.5) return {'radius': 10.0, 'growth': 3}; // Medium food
-        return {'radius': 6.0, 'growth': 1}; // Small food
+        if (sizeRoll < 0.2) return {'radius': 22.0, 'growth': 5}; // Large food
+        if (sizeRoll < 0.5) return {'radius': 16.0, 'growth': 3}; // Medium food
+        return {'radius': 10.0, 'growth': 1}; // Small food
       } else {
-        if (sizeRoll < 0.1) return {'radius': 10.0, 'growth': 3}; // Medium food
-        return {'radius': 6.0, 'growth': 1}; // Small food
+        if (sizeRoll < 0.1) return {'radius': 16.0, 'growth': 3}; // Medium food
+        return {'radius': 10.0, 'growth': 1}; // Small food
       }
     }
-    // Tail area (last 25% of segments) - mostly small food
+    // Tail area (last 25% of segments) - mostly small food with increased size
     else {
-      if (sizeRoll < 0.05) return {'radius': 10.0, 'growth': 3}; // Medium food (rare)
-      return {'radius': 6.0, 'growth': 1}; // Small food (common)
+      if (sizeRoll < 0.05) return {'radius': 16.0, 'growth': 3}; // Medium food (rare)
+      return {'radius': 10.0, 'growth': 1}; // Small food (common)
     }
   }
 
@@ -264,14 +276,14 @@ class FoodManager {
       );
 
       // Clamp to world bounds
-      position.x = position.x.clamp(worldBounds.left + 14.0, worldBounds.right - 14.0);
-      position.y = position.y.clamp(worldBounds.top + 14.0, worldBounds.bottom - 14.0);
+      position.x = position.x.clamp(worldBounds.left + 20.0, worldBounds.right - 20.0);
+      position.y = position.y.clamp(worldBounds.top + 20.0, worldBounds.bottom - 20.0);
 
       final color = _foodColors[_random.nextInt(_foodColors.length)];
 
-      // Extra food is mostly small with occasional medium
+      // Extra food is mostly small with occasional medium (with increased sizes)
       final isLarger = _random.nextDouble() < 0.15; // Reduced chance
-      final foodRadius = isLarger ? 10.0 : 6.0;
+      final foodRadius = isLarger ? 16.0 : 10.0;  // Increased sizes
       final foodGrowth = isLarger ? 3 : 1;
 
       foodList.add(FoodModel(
@@ -303,24 +315,25 @@ class FoodManager {
         snakePosition.y + offsetY,
       );
 
-      foodPosition.x = foodPosition.x.clamp(worldBounds.left + 14.0, worldBounds.right - 14.0);
-      foodPosition.y = foodPosition.y.clamp(worldBounds.top + 14.0, worldBounds.bottom - 14.0);
+      foodPosition.x = foodPosition.x.clamp(worldBounds.left + 20.0, worldBounds.right - 20.0);
+      foodPosition.y = foodPosition.y.clamp(worldBounds.top + 20.0, worldBounds.bottom - 20.0);
 
       double radius;
       int growth;
       final sizeRoll = _random.nextDouble();
 
+      // Increased sizes for player death food
       if (snakeHeadRadius > 25) {
-        if (sizeRoll < 0.3) { radius = 14.0; growth = 5; }
-        else if (sizeRoll < 0.6) { radius = 10.0; growth = 3; }
-        else { radius = 6.0; growth = 1; }
+        if (sizeRoll < 0.3) { radius = 22.0; growth = 5; }  // Increased
+        else if (sizeRoll < 0.6) { radius = 16.0; growth = 3; }  // Increased
+        else { radius = 10.0; growth = 1; }  // Increased
       } else if (snakeHeadRadius > 18) {
-        if (sizeRoll < 0.2) { radius = 14.0; growth = 5; }
-        else if (sizeRoll < 0.5) { radius = 10.0; growth = 3; }
-        else { radius = 6.0; growth = 1; }
+        if (sizeRoll < 0.2) { radius = 22.0; growth = 5; }  // Increased
+        else if (sizeRoll < 0.5) { radius = 16.0; growth = 3; }  // Increased
+        else { radius = 10.0; growth = 1; }  // Increased
       } else {
-        if (sizeRoll < 0.1) { radius = 10.0; growth = 3; }
-        else { radius = 6.0; growth = 1; }
+        if (sizeRoll < 0.1) { radius = 16.0; growth = 3; }  // Increased
+        else { radius = 10.0; growth = 1; }  // Increased
       }
 
       final color = _foodColors[_random.nextInt(_foodColors.length)];

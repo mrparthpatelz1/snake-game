@@ -59,7 +59,7 @@ class SlitherGame extends FlameGame with DragCallbacks {
   Future<void> onLoad() async {
     await super.onLoad();
 
-    const zoom = 0.7;
+    const zoom = 0.6;
     final visibleWidth = size.x / zoom;
     final visibleHeight = size.y / zoom;
     final screenDiagonal = sqrt(visibleWidth * visibleWidth + visibleHeight * visibleHeight);

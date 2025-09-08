@@ -365,8 +365,8 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
         segmentSpacing: 13.0 * 0.6,
         baseSpeed: 60,
         boostSpeed: 130,
-        minRadius: 12.0,
-        maxRadius: 40.0,
+        minRadius: 16.0,
+        maxRadius: 50.0,
         headSprite: headSprite
     );
 
@@ -813,8 +813,8 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
         segmentSpacing: 10,
         baseSpeed: 70,
         boostSpeed: 130,
-        minRadius: 8,
-        maxRadius: 18,
+        minRadius: 16,
+        maxRadius: 50,
         headSprite: headSprite
     );
 
