@@ -135,14 +135,36 @@ class SlitherGame extends FlameGame with DragCallbacks {
   void revivePlayer() {
     overlays.remove('revive');
 
-    if (snakeThatKilledPlayer != null) {
-      // The death animation will handle food scattering automatically
+    if (snakeThatKilledPlayer != null && !snakeThatKilledPlayer!.isDead) {
+      // Kill the AI snake that killed the player with special revenge death
+      print('Revive: Executing revenge kill on AI snake');
+
+      // Use special revenge kill method for bonus food and effects
+      aiManager.killSnakeAsRevenge(snakeThatKilledPlayer!);
+
+      // Add bonus kills to player's score
+      playerController.kills.value++;
+
+      // Strong haptic feedback for revenge
+      HapticFeedback.heavyImpact();
+
+      // Spawn a replacement AI snake after a delay
+      Future.delayed(const Duration(seconds: 2), () {
+        if (aiManager.isMounted) {
+          aiManager.spawnNewSnake();
+          print('Revive: Spawned replacement AI snake');
+        }
+      });
+
       snakeThatKilledPlayer = null;
     }
 
     player.revive();
     playerController.hasUsedRevive.value = true;
     resumeEngine();
+
+    // Optional: Show a message to the player
+    print('🎮 PLAYER REVIVED! Revenge executed! 🎮');
   }
 
   void handlePlayerDeath(AiSnakeData? killer) {

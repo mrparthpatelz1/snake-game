@@ -124,27 +124,40 @@ class AiPainter extends Component with HasGameReference<SlitherGame> {
   }
 
   void _renderDeathEffect(Canvas canvas, AiSnakeData snake) {
+    // Check if this is a revenge death (longer animation duration)
+    final isRevengeDeath = snake.deathAnimationTimer > AiSnakeData.deathAnimationDuration;
+
     // Create a fading ring effect around the dying snake
-    final progress = 1.0 - (snake.deathAnimationTimer / AiSnakeData.deathAnimationDuration);
-    final ringRadius = snake.headRadius * (1.0 + progress * 2.0);
-    final ringOpacity = (1.0 - progress) * 0.3 * snake.opacity;
+    final progress = 1.0 - (snake.deathAnimationTimer /
+        (isRevengeDeath ? AiSnakeData.deathAnimationDuration * 1.5 : AiSnakeData.deathAnimationDuration));
+    final ringRadius = snake.headRadius * (1.0 + progress * (isRevengeDeath ? 3.0 : 2.0));
+    final ringOpacity = (1.0 - progress) * (isRevengeDeath ? 0.5 : 0.3) * snake.opacity;
 
     if (ringOpacity > 0.01) {
       final ringPaint = Paint()
-        ..color = Colors.white.withOpacity(ringOpacity)
+        ..color = (isRevengeDeath ? Colors.red : Colors.white).withOpacity(ringOpacity)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3.0;
+        ..strokeWidth = isRevengeDeath ? 5.0 : 3.0;
 
       canvas.drawCircle(snake.position.toOffset(), ringRadius, ringPaint);
+
+      // Add extra rings for revenge death
+      if (isRevengeDeath) {
+        final innerRingPaint = Paint()
+          ..color = Colors.orange.withOpacity(ringOpacity * 0.7)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3.0;
+        canvas.drawCircle(snake.position.toOffset(), ringRadius * 0.7, innerRingPaint);
+      }
     }
 
     // Add some particle-like effects
-    _renderDeathParticles(canvas, snake, progress);
+    _renderDeathParticles(canvas, snake, progress, isRevengeDeath);
   }
 
-  void _renderDeathParticles(Canvas canvas, AiSnakeData snake, double progress) {
-    final particleCount = 8;
-    final maxParticleDistance = snake.headRadius * 3;
+  void _renderDeathParticles(Canvas canvas, AiSnakeData snake, double progress, [bool isRevenge = false]) {
+    final particleCount = isRevenge ? 16 : 8;  // More particles for revenge
+    final maxParticleDistance = snake.headRadius * (isRevenge ? 4 : 3);
 
     for (int i = 0; i < particleCount; i++) {
       final angle = (i / particleCount) * 2 * math.pi;
@@ -154,12 +167,12 @@ class AiPainter extends Component with HasGameReference<SlitherGame> {
       final particleY = snake.position.y + (distance * math.sin(angle));
       final particlePos = Offset(particleX, particleY);
 
-      final particleSize = (1.0 - progress) * 3.0;
+      final particleSize = (1.0 - progress) * (isRevenge ? 5.0 : 3.0);
       final particleOpacity = (1.0 - progress) * snake.opacity;
 
       if (particleSize > 0.5 && particleOpacity > 0.01) {
         final particlePaint = Paint()
-          ..color = snake.skinColors[0].withOpacity(particleOpacity)
+          ..color = (isRevenge ? Colors.redAccent : snake.skinColors[0]).withOpacity(particleOpacity)
           ..style = PaintingStyle.fill;
 
         canvas.drawCircle(particlePos, particleSize, particlePaint);

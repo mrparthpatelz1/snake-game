@@ -100,23 +100,48 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     }
   }
 
-  void _startDeathAnimation(AiSnakeData snake) {
+  // PUBLIC METHOD: Kill a specific AI snake as revenge (when player revives)
+  void killSnakeAsRevenge(AiSnakeData snake) {
+    if (snake.isDead) return;
+
+    print('REVENGE KILL: Eliminating AI snake that killed the player!');
+    snake.isDead = true;
+
+    // Start special death animation with bonus food
+    _startDeathAnimation(snake, isRevengeDeath: true);
+  }
+
+  void _startDeathAnimation(AiSnakeData snake, {bool isRevengeDeath = false}) {
     print('Starting death animation for snake with ${snake.segmentCount} segments and radius ${snake.headRadius}');
 
     // Add to dying snakes list
     _dyingSnakes.add(snake);
 
     // Set death animation properties
-    snake.deathAnimationTimer = AiSnakeData.deathAnimationDuration;
+    snake.deathAnimationTimer = isRevengeDeath
+        ? AiSnakeData.deathAnimationDuration * 1.5  // Longer animation for revenge kill
+        : AiSnakeData.deathAnimationDuration;
     snake.originalScale = 1.0;
 
-    // Scatter food using improved method
-    foodManager.scatterFoodFromAiSnakeSlitherStyle(
-        snake.position,
-        snake.headRadius,
-        snake.segmentCount,
-        snake.bodySegments
-    );
+    // Scatter MORE food if this is a revenge kill
+    if (isRevengeDeath) {
+      // Double the food for revenge kills
+      foodManager.scatterFoodFromAiSnakeSlitherStyle(
+          snake.position,
+          snake.headRadius,
+          snake.segmentCount * 2,  // Double food!
+          snake.bodySegments
+      );
+      print('REVENGE KILL: Double food scattered from killer AI snake!');
+    } else {
+      // Normal food scattering
+      foodManager.scatterFoodFromAiSnakeSlitherStyle(
+          snake.position,
+          snake.headRadius,
+          snake.segmentCount,
+          snake.bodySegments
+      );
+    }
 
     // Additional visual feedback
     print('Snake death: scattering food along body path at position (${snake.position.x.toStringAsFixed(1)}, ${snake.position.y.toStringAsFixed(1)})');
@@ -805,4 +830,6 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
 
   int get totalSnakeCount => snakes.length;
   int get aliveSnakeCount => snakes.where((s) => !s.isDead).length;
+
+
 }
