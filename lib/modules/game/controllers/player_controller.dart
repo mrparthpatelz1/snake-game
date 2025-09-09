@@ -46,8 +46,8 @@ import '../../../data/service/settings_service.dart';
 
 class PlayerController extends GetxController {
   // --- Snake size ---
-  final RxDouble headRadius = 10.0.obs;
-  final RxDouble bodyRadius = 10.0.obs;
+  final RxDouble headRadius = 16.0.obs;
+  final RxDouble bodyRadius = 16.0.obs;
   final double maxRadius = 50.0;
   final double minRadius = 16.0;
 
