@@ -39,6 +39,7 @@ dependencies:
   collection: ^1.19.0
   get_storage: ^2.1.1
   google_mobile_ads: ^6.0.0
+  haptic_feedback: ^0.5.1+1
 
 dev_dependencies:
   flutter_test:

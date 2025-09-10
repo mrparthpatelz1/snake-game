@@ -7,7 +7,7 @@ import '../../../../data/models/food_model.dart';
 
 class FoodManager {
   final Random _random = Random();
-  final int foodCount = 100;
+  final int foodCount = 80;
   final List<FoodModel> foodList = [];
   final double spawnRadius;
   final double maxDistance;
@@ -15,10 +15,9 @@ class FoodManager {
   int _updateCounter = 0;
   bool _initialFoodSpawned = false;
 
-  // final List<Color> _foodColors = [
-  //   Colors.redAccent, Colors.greenAccent, Colors.blueAccent,
-  //   Colors.purpleAccent, Colors.orangeAccent, Colors.cyanAccent, Colors.pinkAccent,
-  // ];
+  // Track total food to prevent lag
+  static const int MAX_FOOD_LIMIT = 150; // Increased slightly for snake deaths
+  static const int OPTIMAL_FOOD_COUNT = 80;
 
   final List<Color> _foodColors = [
     Colors.redAccent.shade400,
@@ -54,16 +53,15 @@ class FoodManager {
   void update(double dt, Vector2 playerPosition) {
     _updateCounter++;
 
-    // Update all food animations (including spawn animations)
-    // Update all food animations (including spawn animations)
+    // Update all food animations
     for (final food in foodList) {
       food.updateAnimations(dt);
     }
 
-    if (_updateCounter < 60) return; // Only run cleanup logic once per second
+    if (_updateCounter < 60) return;
     _updateCounter = 0;
 
-    // Remove consumed food and food that is too far from the player
+    // Remove consumed food and distant food
     int removedCount = 0;
     foodList.removeWhere((food) {
       if (food.shouldBeRemoved) {
@@ -78,21 +76,21 @@ class FoodManager {
       return false;
     });
 
-    // Spawn new food if needed
+    // Only spawn new food if below optimal count
     int spawnedCount = 0;
-    while (foodList.length < foodCount) {
+    while (foodList.length < OPTIMAL_FOOD_COUNT && foodList.length < MAX_FOOD_LIMIT) {
       spawnFood(playerPosition);
       spawnedCount++;
     }
 
-    if (removedCount > 5 || spawnedCount > 5) { // Reduce debug spam
+    if (removedCount > 5 || spawnedCount > 5) {
       print('Food Update -> Removed: $removedCount, Spawned: $spawnedCount, Total: ${foodList.length}');
     }
-
-    print("<><><><<>><><><><><><><><><><><><><><><><><><>><><><><><>${foodList.length}");
   }
 
   void spawnFood(Vector2 playerPosition) {
+    if (foodList.length >= MAX_FOOD_LIMIT) return;
+
     final x = playerPosition.x + _random.nextDouble() * spawnRadius * 2 - spawnRadius;
     final y = playerPosition.y + _random.nextDouble() * spawnRadius * 2 - spawnRadius;
 
@@ -126,6 +124,8 @@ class FoodManager {
   }
 
   void spawnFoodAt(Vector2 position) {
+    if (foodList.length >= MAX_FOOD_LIMIT) return;
+
     final color = _foodColors[_random.nextInt(_foodColors.length)];
     const radius = 10.0;
     const growth = 1;
@@ -138,157 +138,128 @@ class FoodManager {
     ));
   }
 
-  // IMPROVED: Better slither.io style food scattering for AI snakes
-  void scatterFoodFromAiSnakeSlitherStyle(Vector2 snakeHeadPosition, double snakeHeadRadius,
-      int segmentCount, List<Vector2> bodySegments) {
-    // Calculate food amount based on snake size (similar to slither.io)
-    final foodAmount = _calculateSlitherStyleFoodAmount(segmentCount, snakeHeadRadius);
+  // NEW METHOD: Scatter exactly 10-15 food pellets along AI snake body
+  void scatterFoodFromAiSnakeBody(Vector2 snakeHeadPosition, double snakeHeadRadius,
+      List<Vector2> bodySegments, bool isRevengeDeath) {
 
-    print('Scattering $foodAmount food items from AI snake (segments: $segmentCount, radius: ${snakeHeadRadius.toStringAsFixed(1)})');
+    // Decide food amount: 10-15 pellets (more for revenge)
+    final foodAmount = isRevengeDeath
+        ? 13 + _random.nextInt(3)  // 13-15 for revenge
+        : 10 + _random.nextInt(6); // 10-15 normally
 
-    // IMPROVED: Create more natural distribution following the snake's body
-    final allPositions = [snakeHeadPosition, ...bodySegments];
-    final totalPositions = allPositions.length;
+    // Check space available
+    final currentFoodCount = foodList.length;
+    final spaceAvailable = MAX_FOOD_LIMIT - currentFoodCount;
+    final actualFoodAmount = min(foodAmount, spaceAvailable);
 
-    // Calculate how many food items per position section
-    final foodPerSection = foodAmount / totalPositions;
-    int foodSpawned = 0;
-
-    // Scatter food along the entire snake body path
-    for (int i = 0; i < totalPositions && foodSpawned < foodAmount; i++) {
-      final segmentPos = allPositions[i];
-
-      // Calculate how many food items for this section
-      final foodForThisSection = (foodPerSection * (1 + _random.nextDouble())).round().clamp(1, 4);
-
-      for (int j = 0; j < foodForThisSection && foodSpawned < foodAmount; j++) {
-        final foodPosition = _getSlitherStyleFoodPositionImproved(segmentPos, i, totalPositions, j, foodForThisSection);
-        final foodData = _getSlitherStyleFoodSizeImproved(snakeHeadRadius, i, totalPositions);
-
-        // Clamp to world bounds
-        foodPosition.x = foodPosition.x.clamp(worldBounds.left + 14.0, worldBounds.right - 14.0);
-        foodPosition.y = foodPosition.y.clamp(worldBounds.top + 14.0, worldBounds.bottom - 14.0);
-
-        final color = _foodColors[_random.nextInt(_foodColors.length)];
-
-        foodList.add(FoodModel(
-          position: foodPosition,
-          color: color,
-          radius: foodData['radius'],
-          growth: foodData['growth'],
-          skipSpawnAnimation: false,
-        ));
-
-        foodSpawned++;
-      }
+    if (actualFoodAmount <= 0) {
+      print('Food limit reached, no food scattered from AI snake death');
+      return;
     }
 
-    // Add some extra scattered food in a wider radius around the death location
-    _addExtraScatteredFoodImproved(snakeHeadPosition, snakeHeadRadius, (foodAmount * 0.2).round());
-  }
+    print('AI Snake death: Scattering $actualFoodAmount food pellets along body');
 
-  // Calculate food amount like slither.io (more food = bigger snake)
-  int _calculateSlitherStyleFoodAmount(int segmentCount, double headRadius) {
-    final baseFood = (segmentCount * 0.35).round(); // 35% of segments become food
-    final sizeBonus = ((headRadius - 12.0) * 0.4).round(); // Bonus for larger snakes
-    return (baseFood + sizeBonus).clamp(6, 25); // Min 6, Max 25 food items (reduced to prevent lag)
-  }
+    // Distribute food evenly along the snake's body
+    final totalPositions = bodySegments.length;
+    if (totalPositions == 0) {
+      // If no body segments, scatter around head
+      _scatterAroundPoint(snakeHeadPosition, actualFoodAmount, snakeHeadRadius);
+      return;
+    }
 
-  // IMPROVED: Get slither.io style food position with more natural scattering
-  Vector2 _getSlitherStyleFoodPositionImproved(Vector2 segmentPos, int segmentIndex, int totalSegments, int foodIndex, int totalFoodAtSegment) {
-    // Create a more natural spread based on segment position
-    final segmentProgress = segmentIndex / totalSegments; // 0.0 = head, 1.0 = tail
+    // Calculate step to distribute food evenly
+    final step = max(1, totalPositions ~/ actualFoodAmount);
+    int foodSpawned = 0;
 
-    if (totalFoodAtSegment == 1) {
-      // Single food: random offset with bias towards the sides
+    // Place food along body segments
+    for (int i = 0; i < totalPositions && foodSpawned < actualFoodAmount; i += step) {
+      final segmentPos = bodySegments[i];
+
+      // Add some randomness to position
       final angle = _random.nextDouble() * 2 * pi;
-      final distance = _random.nextDouble() * 25 + 10; // 10-35 pixels
-      final sideInfluence = sin(angle) * 5; // Add side bias
+      final distance = 10 + _random.nextDouble() * 20; // 10-30 pixels from segment
 
-      return Vector2(
-        segmentPos.x + cos(angle) * distance + sideInfluence,
-        segmentPos.y + sin(angle) * distance,
-      );
-    } else {
-      // Multiple food: create clusters with some randomness
-      final baseAngle = (foodIndex / totalFoodAtSegment) * 2 * pi;
-      final clusterVariation = (_random.nextDouble() - 0.5) * pi * 0.5; // ±45 degrees variation
-      final angle = baseAngle + clusterVariation;
-
-      // Distance varies based on position in snake (head = wider spread, tail = tighter)
-      final baseDistance = 15 + (segmentProgress * 20); // 15-35 pixels
-      final distance = baseDistance + (_random.nextDouble() - 0.5) * 10;
-
-      return Vector2(
+      final foodPosition = Vector2(
         segmentPos.x + cos(angle) * distance,
         segmentPos.y + sin(angle) * distance,
       );
-    }
-  }
-
-  // IMPROVED: Get slither.io style food size with better distribution
-  Map<String, dynamic> _getSlitherStyleFoodSizeImproved(double snakeHeadRadius, int segmentIndex, int totalSegments) {
-    // Food size decreases from head to tail, but not linearly
-    final positionFactor = 1.0 - (segmentIndex / totalSegments); // 1.0 at head, 0.0 at tail
-    final sizeFactor = (positionFactor * 0.6) + 0.4; // 0.4 to 1.0 range (more balanced)
-
-    final sizeRoll = _random.nextDouble();
-
-    // Head area (first 25% of segments) - premium food
-    if (positionFactor > 0.75) {
-      if (snakeHeadRadius > 25) {
-        if (sizeRoll < 0.4) return {'radius': 20.0, 'growth': 5}; // Large food
-        if (sizeRoll < 0.7) return {'radius': 15.0, 'growth': 3}; // Medium food
-        return {'radius': 10.0, 'growth': 1}; // Small food
-      } else {
-        if (sizeRoll < 0.25) return {'radius': 20.0, 'growth': 5}; // Large food
-        if (sizeRoll < 0.55) return {'radius': 15.0, 'growth': 3}; // Medium food
-        return {'radius': 10.0, 'growth': 1}; // Small food
-      }
-    }
-    // Body area (middle 50% of segments) - mixed food
-    else if (positionFactor > 0.25) {
-      if (snakeHeadRadius > 20) {
-        if (sizeRoll < 0.2) return {'radius': 20.0, 'growth': 5}; // Large food
-        if (sizeRoll < 0.5) return {'radius': 15.0, 'growth': 3}; // Medium food
-        return {'radius': 10.0, 'growth': 1}; // Small food
-      } else {
-        if (sizeRoll < 0.1) return {'radius': 15.0, 'growth': 3}; // Medium food
-        return {'radius': 10.0, 'growth': 1}; // Small food
-      }
-    }
-    // Tail area (last 25% of segments) - mostly small food
-    else {
-      if (sizeRoll < 0.05) return {'radius': 15.0, 'growth': 3}; // Medium food (rare)
-      return {'radius': 10.0, 'growth': 1}; // Small food (common)
-    }
-  }
-
-  // IMPROVED: Add extra scattered food with better distribution
-  void _addExtraScatteredFoodImproved(Vector2 centerPos, double radius, int extraCount) {
-    for (int i = 0; i < extraCount; i++) {
-      // Create rings of food at different distances
-      final ringIndex = i % 3; // 3 rings
-      final ringRadius = radius * (1.5 + ringIndex * 0.5); // Rings at 1.5x, 2.0x, 2.5x radius
-
-      final angle = _random.nextDouble() * 2 * pi;
-      final distance = ringRadius + (_random.nextDouble() - 0.5) * radius * 0.3; // Add some randomness
-
-      final position = Vector2(
-        centerPos.x + cos(angle) * distance,
-        centerPos.y + sin(angle) * distance,
-      );
 
       // Clamp to world bounds
+      foodPosition.x = foodPosition.x.clamp(worldBounds.left + 14.0, worldBounds.right - 14.0);
+      foodPosition.y = foodPosition.y.clamp(worldBounds.top + 14.0, worldBounds.bottom - 14.0);
+
+      // Determine food size
+      final sizeRoll = _random.nextDouble();
+      double radius;
+      int growth;
+
+      if (isRevengeDeath) {
+        // Better food for revenge kills
+        if (sizeRoll < 0.2) {
+          radius = 20.0; growth = 5;
+        } else if (sizeRoll < 0.5) {
+          radius = 15.0; growth = 3;
+        } else {
+          radius = 10.0; growth = 1;
+        }
+      } else {
+        // Normal distribution
+        if (sizeRoll < 0.1) {
+          radius = 20.0; growth = 5;
+        } else if (sizeRoll < 0.25) {
+          radius = 15.0; growth = 3;
+        } else {
+          radius = 10.0; growth = 1;
+        }
+      }
+
+      final color = _foodColors[_random.nextInt(_foodColors.length)];
+
+      foodList.add(FoodModel(
+        position: foodPosition,
+        color: color,
+        radius: radius,
+        growth: growth,
+        skipSpawnAnimation: false,
+      ));
+
+      foodSpawned++;
+    }
+
+    // If we couldn't place all food along body, scatter remaining around head
+    if (foodSpawned < actualFoodAmount) {
+      _scatterAroundPoint(snakeHeadPosition, actualFoodAmount - foodSpawned, snakeHeadRadius);
+    }
+  }
+
+  // Helper method to scatter food around a point
+  void _scatterAroundPoint(Vector2 center, int amount, double radius) {
+    for (int i = 0; i < amount; i++) {
+      final angle = _random.nextDouble() * 2 * pi;
+      final distance = radius + _random.nextDouble() * radius;
+
+      final position = Vector2(
+        center.x + cos(angle) * distance,
+        center.y + sin(angle) * distance,
+      );
+
       position.x = position.x.clamp(worldBounds.left + 14.0, worldBounds.right - 14.0);
       position.y = position.y.clamp(worldBounds.top + 14.0, worldBounds.bottom - 14.0);
 
       final color = _foodColors[_random.nextInt(_foodColors.length)];
 
-      // Extra food is mostly small with occasional medium
-      final isLarger = _random.nextDouble() < 0.15; // Reduced chance
-      final foodRadius = isLarger ? 15.0 : 10.0;
-      final foodGrowth = isLarger ? 3 : 1;
+      // Simple size distribution
+      final sizeRoll = _random.nextDouble();
+      double foodRadius;
+      int foodGrowth;
+
+      if (sizeRoll < 0.1) {
+        foodRadius = 20.0; foodGrowth = 5;
+      } else if (sizeRoll < 0.25) {
+        foodRadius = 15.0; foodGrowth = 3;
+      } else {
+        foodRadius = 10.0; foodGrowth = 1;
+      }
 
       foodList.add(FoodModel(
         position: position,
@@ -300,17 +271,28 @@ class FoodManager {
     }
   }
 
-  // Keep the original method for player death (scatters randomly around position)
+  // OLD METHOD: Keep for backward compatibility but redirect to new method
+  void scatterFoodFromAiSnakeSlitherStyle(Vector2 snakeHeadPosition, double snakeHeadRadius,
+      int segmentCount, List<Vector2> bodySegments) {
+    // Redirect to new method with 10-15 food pellets
+    scatterFoodFromAiSnakeBody(snakeHeadPosition, snakeHeadRadius, bodySegments, false);
+  }
+
+  // Player death food scattering
   void scatterFoodFromSnake(Vector2 snakePosition, double snakeHeadRadius, int segmentCount) {
-    final baseFood = (segmentCount / 3).round().clamp(3, 15);
-    final bonusFood = (snakeHeadRadius / 8).round();
+    final baseFood = (segmentCount / 4).round().clamp(2, 10);
+    final bonusFood = (snakeHeadRadius / 10).round();
     final totalFood = baseFood + bonusFood;
 
-    print('Scattering $totalFood food items from player snake death');
+    // Check space available
+    final spaceAvailable = MAX_FOOD_LIMIT - foodList.length;
+    final actualFood = min(totalFood, spaceAvailable);
 
-    for (int i = 0; i < totalFood; i++) {
+    print('Scattering $actualFood food items from player snake death');
+
+    for (int i = 0; i < actualFood; i++) {
       final angle = _random.nextDouble() * 2 * pi;
-      final distance = _random.nextDouble() * 100 + 20;
+      final distance = _random.nextDouble() * 80 + 20;
       final offsetX = cos(angle) * distance;
       final offsetY = sin(angle) * distance;
 
@@ -326,17 +308,12 @@ class FoodManager {
       int growth;
       final sizeRoll = _random.nextDouble();
 
-      if (snakeHeadRadius > 25) {
-        if (sizeRoll < 0.3) { radius = 20.0; growth = 5; }
-        else if (sizeRoll < 0.6) { radius = 15.0; growth = 3; }
-        else { radius = 10.0; growth = 1; }
-      } else if (snakeHeadRadius > 18) {
-        if (sizeRoll < 0.2) { radius = 20.0; growth = 5; }
-        else if (sizeRoll < 0.5) { radius = 15.0; growth = 3; }
-        else { radius = 10.0; growth = 1; }
+      if (sizeRoll < 0.1) {
+        radius = 20.0; growth = 5;
+      } else if (sizeRoll < 0.25) {
+        radius = 15.0; growth = 3;
       } else {
-        if (sizeRoll < 0.1) { radius = 15.0; growth = 3; }
-        else { radius = 10.0; growth = 1; }
+        radius = 10.0; growth = 1;
       }
 
       final color = _foodColors[_random.nextInt(_foodColors.length)];
@@ -351,11 +328,10 @@ class FoodManager {
     }
   }
 
-  // Legacy method - keeping for backward compatibility
+  // Legacy method - redirect
   void scatterFoodFromAiSnake(Vector2 snakeHeadPosition, double snakeHeadRadius,
       int segmentCount, List<Vector2> bodySegments) {
-    // Redirect to improved method
-    scatterFoodFromAiSnakeSlitherStyle(snakeHeadPosition, snakeHeadRadius, segmentCount, bodySegments);
+    scatterFoodFromAiSnakeBody(snakeHeadPosition, snakeHeadRadius, bodySegments, false);
   }
 
   void startConsumingFood(FoodModel food, Vector2 snakeHeadPosition) {

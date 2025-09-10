@@ -5,12 +5,13 @@ import 'package:flame/components.dart';
 import 'package:flame/extensions.dart';
 import 'package:flame/collisions.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Add this for haptics
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../../../data/models/food_model.dart';
 import '../../../../data/service/score_service.dart';
 import '../../../../data/service/settings_service.dart';
 import '../../controllers/player_controller.dart';
+import '../../controllers/home_controller.dart';
 import '../../views/game_screen.dart';
 import '../food/food_manager.dart';
 
@@ -25,6 +26,9 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
   final FoodManager foodManager;
   final ScoreService _scoreService = ScoreService();
   final SettingsService settings = Get.find<SettingsService>();
+
+  // Get username from HomeController
+  late final String username;
 
   PlayerComponent({required this.foodManager}) : super();
 
@@ -43,11 +47,47 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
 
   final List<Vector2> _path = [];
 
+  // Smooth boost animation
+  double _currentBoostScale = 1.0;
+  double _targetBoostScale = 1.0;
+  final double _boostScaleSpeed = 8.0;
+  final double _boostScaleMultiplier = 1.12;
+
+  // Text rendering
+  late final TextPaint _namePaint;
+
   @override
   Future<void> onLoad() async {
     await super.onLoad();
     anchor = Anchor.center;
     headSprite = await game.loadSprite(settings.selectedHead);
+
+    // Get username from HomeController
+    try {
+      final homeController = Get.find<HomeController>();
+      username = homeController.nicknameController.text.isNotEmpty
+          ? homeController.nicknameController.text
+          : "Player";
+    } catch (e) {
+      username = "Player";
+    }
+
+    // Initialize text paint for username
+    _namePaint = TextPaint(
+      style: TextStyle(
+        color: Colors.white,
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+        shadows: [
+          Shadow(
+            blurRadius: 4,
+            color: Colors.black,
+            offset: Offset(1, 1),
+          ),
+        ],
+      ),
+    );
+
     add(CircleHitbox(
         radius: playerController.headRadius.value,
         position: Vector2.zero(),
@@ -65,6 +105,9 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
         (playerController.segmentCount.value - playerController.initialSegmentCount);
 
     if (newSegments > 0) {
+      // Haptic feedback when growing
+      HapticFeedback.selectionClick();
+
       playerController.segmentCount.value += newSegments;
       for (int i = 0; i < newSegments; i++) {
         bodySegments.add(BodySegment(bodySegments.last.position.clone(), scale: 0.0));
@@ -82,6 +125,7 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
 
   void _shrinkSnake() {
     if (bodySegments.length <= _minLength) return;
+
     playerController.segmentCount.value--;
     playerController.foodScore.value -= playerController.foodPerSegment;
     if (playerController.foodScore.value < 0) playerController.foodScore.value = 0;
@@ -100,10 +144,9 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     if (isDead) return;
     isDead = true;
 
-    // Add haptic feedback for player death
+    // Strong haptic feedback for death
     HapticFeedback.heavyImpact();
 
-    // Use the new scatterFoodFromSnake method for player death
     foodManager.scatterFoodFromSnake(position, playerController.headRadius.value, bodySegments.length);
 
     final currentScore = playerController.foodScore.value;
@@ -116,10 +159,12 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
 
   void revive() {
     isDead = false;
+    // Haptic feedback for revive
+    HapticFeedback.mediumImpact();
   }
 
-  // Method to handle AI snake kill with haptic feedback
   void onAiSnakeKilled() {
+    // Light haptic feedback for AI kill
     HapticFeedback.lightImpact();
   }
 
@@ -133,6 +178,19 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     final currentSpeed = canBoost ? playerController.boostSpeed : playerController.baseSpeed;
     final currentBobFrequency = canBoost ? _headBobFrequency * 2.0 : _headBobFrequency;
     _bobAngle = sin(_elapsedTime * currentBobFrequency) * _headBobAmplitude;
+
+    // Smooth boost scale animation
+    _targetBoostScale = canBoost ? _boostScaleMultiplier : 1.0;
+    _currentBoostScale = _lerpDouble(_currentBoostScale, _targetBoostScale, 1 - exp(-_boostScaleSpeed * dt));
+
+    // Haptic feedback when boost starts/stops
+    bool wasBoostingLastFrame = false;
+    if (canBoost != wasBoostingLastFrame) {
+      if (canBoost) {
+        HapticFeedback.selectionClick(); // Boost start
+      }
+      wasBoostingLastFrame = canBoost;
+    }
 
     _shrinkTimer.update(dt);
     if (canBoost && !_shrinkTimer.isRunning()) {
@@ -157,27 +215,27 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
       headAngle += rotationAmount * angleDiff.sign;
     }
 
-    // Improved path-following with tighter spacing
-    if (_path.isEmpty || position.distanceTo(_path.first) > 2.0) {
+    // Path management for smooth segments
+    if (_path.isEmpty || position.distanceTo(_path.first) > 1.5) {
       _path.insert(0, position.clone());
     }
 
-    // Dynamic segment spacing based on head radius and boost state
-    final dynamicSpacing = _calculateDynamicSpacing();
-    final maxPathLength = (bodySegments.length * (dynamicSpacing / 2)).round() + 1;
+    final baseSpacing = playerController.headRadius.value * 0.55;
+    final maxPathLength = (bodySegments.length * baseSpacing * 0.6).round() + 1;
     if (_path.length > maxPathLength) {
       _path.removeRange(maxPathLength, _path.length);
     }
 
+    // Update segments
     for (int i = 0; i < bodySegments.length; i++) {
       final segment = bodySegments[i];
+
       if (segment.scale < 1.0) {
         segment.scale = min(1.0, segment.scale + dt * _growthSpeed);
       }
 
-      // Use dynamic spacing for better attachment
-      final targetPoint = _getPointOnPathAtDistance((i + 1) * dynamicSpacing);
-      segment.position.lerp(targetPoint, 1 - exp(-30 * dt));
+      final targetPoint = _getPointOnPathAtDistance((i + 1) * baseSpacing);
+      segment.position.lerp(targetPoint, 1 - exp(-25 * dt));
     }
 
     position.clamp(
@@ -185,50 +243,36 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
         SlitherGame.playArea.bottomRight.toVector2()
     );
 
-    // Enhanced food consumption with animation
     _checkAndConsumeFoodWithAnimation();
   }
 
-  // Calculate dynamic segment spacing for better head/body attachment
-  double _calculateDynamicSpacing() {
-    final baseSpacing = playerController.headRadius.value * 0.5;
-    // When boosting, reduce spacing even more for tighter body
-    return playerController.isBoosting.value ? baseSpacing * 0.8 : baseSpacing;
+  double _lerpDouble(double a, double b, double t) {
+    return a + (b - a) * t;
   }
 
   void _checkAndConsumeFoodWithAnimation() {
     final eatDistSq = (playerController.headRadius.value * playerController.headRadius.value) + 500;
     final candidateFood = <FoodModel>[];
 
-    // Check only eatable food (not already being consumed or spawning)
     for (final food in foodManager.eatableFoodList) {
       if (position.distanceToSquared(food.position) < eatDistSq) {
         candidateFood.add(food);
       }
     }
 
-    // Start consumption animation for each food item
     for (final food in candidateFood) {
+      // Light haptic when eating food
+      HapticFeedback.selectionClick();
+
       foodManager.startConsumingFood(food, position);
       _growSnake(food.growth);
-
-      // Spawn new food to replace the one being consumed
       foodManager.spawnFood(position);
-
-      // Optional: Add some visual feedback or sound effect here
       _addEatingEffect(food);
     }
   }
 
   void _addEatingEffect(FoodModel food) {
-    // You can add additional effects here like:
-    // - Screen shake
-    // - Particle effects
-    // - Sound effects
-    // - Score popup animations
-
-    // For now, just a simple debug print
-    print('Player consuming food worth ${food.growth} points!');
+    // Can add visual effects here
   }
 
   Vector2 _getPointOnPathAtDistance(double distance) {
@@ -261,37 +305,50 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
 
     final canBoost = playerController.isBoosting.value && bodySegments.length > _minLength;
 
-    // Render body segments from back to front (EXACTLY like AI snakes)
+    final currentHeadRadius = playerController.headRadius.value * _currentBoostScale;
+    final currentBodyRadius = playerController.bodyRadius.value * _currentBoostScale;
+
+    // Render body segments from back to front
     for (int i = bodySegments.length - 1; i >= 0; i--) {
       final segment = bodySegments[i];
       final color = playerController.skinColors[i % playerController.skinColors.length];
 
-      // FIXED: Use EXACT same boost glow rendering as AI snakes
-      if (canBoost) {
-        _renderBoostGlow(canvas, segment.position, playerController.bodyRadius.value * segment.scale, color, 1.0);
+      final segmentRadius = currentBodyRadius * segment.scale;
+
+      if (canBoost && segment.scale > 0.5) {
+        _renderBoostGlow(canvas, segment.position, segmentRadius, color, 1.0);
       }
 
-      _drawSegment(canvas, segment.position, playerController.bodyRadius.value * segment.scale, color);
+      _drawSegment(canvas, segment.position, segmentRadius, color);
     }
 
-    // FIXED: Add boost glow around head EXACTLY like AI snakes
     if (canBoost) {
-      _renderHeadBoostGlow(canvas, position, playerController.headRadius.value, playerController.skinColors[0], 1.0);
+      _renderHeadBoostGlow(canvas, position, currentHeadRadius, playerController.skinColors[0], 1.0);
     }
 
-    // Render head sprite on top of everything
+    // Render head sprite
     canvas.save();
     canvas.rotate(headAngle + (pi) + _bobAngle);
     headSprite?.render(
         canvas,
         position: Vector2.zero(),
-        size: Vector2.all(playerController.headRadius.value * 2),
+        size: Vector2.all(currentHeadRadius * 2),
         anchor: Anchor.center
     );
     canvas.restore();
+
+    // RENDER USERNAME below the head
+    if (username.isNotEmpty) {
+      final textOffset = Offset(0, currentHeadRadius + 15).toVector2();
+      _namePaint.render(
+        canvas,
+        username,
+        textOffset,
+        anchor: Anchor.topCenter,
+      );
+    }
   }
 
-  // FIXED: EXACT same boost glow effect as AI snakes
   void _renderBoostGlow(Canvas canvas, Vector2 segmentPosition, double radius, Color color, double opacity) {
     final Offset offset = Offset(segmentPosition.x - position.x, segmentPosition.y - position.y);
     final glowRadius = radius * 1.3;
@@ -308,7 +365,6 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     canvas.drawCircle(offset, glowRadius, glowPaint);
   }
 
-  // FIXED: EXACT same head boost glow as AI snakes
   void _renderHeadBoostGlow(Canvas canvas, Vector2 headPosition, double radius, Color color, double opacity) {
     final glowRadius = radius * 1.5;
     final glowPaint = Paint()

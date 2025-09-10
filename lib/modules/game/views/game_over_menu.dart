@@ -20,10 +20,16 @@ class GameOverMenu extends StatelessWidget {
     // Save the final scores and retrieve the high scores
     final currentScore = playerController.foodScore.value;
     final currentKills = playerController.kills.value;
-    _scoreService.saveHighScore(currentScore);
+
+    if (currentScore > _scoreService.getHighScore()) {
+      _scoreService.saveHighScore(currentScore);
+    }
+    if (currentKills > _scoreService.getHighKills()) {
     _scoreService.saveHighKills(currentKills);
-    final highScore = _scoreService.getHighScore();
-    final highKills = _scoreService.getHighKills();
+    }
+    // _scoreService.saveHighScore(currentScore);
+    // final highScore = _scoreService.getHighScore();
+    // final highKills = _scoreService.getHighKills();
 
     return Scaffold(
       backgroundColor: Colors.black.withOpacity(0.6),

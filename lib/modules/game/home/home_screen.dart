@@ -5,6 +5,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:newer_version_snake/data/service/score_service.dart';
 import '../../../routes/app_routes.dart';
 import '../components/world/image_background.dart';
 import '../controllers/home_controller.dart';
@@ -68,6 +69,8 @@ class HomeScreen extends GetView<HomeController> {
 
                   // User Name Input Field with custom background
                   _buildUsernameInput(),
+                  const SizedBox(height: 20),
+                  _buildHighScore(),
                   const SizedBox(height: 20),
 
                   // Custom Image Button for "Snake Skins"
@@ -139,6 +142,106 @@ class HomeScreen extends GetView<HomeController> {
     );
   }
 
+  Widget _buildHighScore() {
+    ScoreService scoreService = ScoreService();
+    String highScore = scoreService.getHighScore().toString();
+    String highKill = scoreService.getHighKills().toString();
+    return Container(
+      width: 340,
+      height: 80,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          // 🔥 High Score Box
+          _buildStatCard(
+            // icon: Icons.emoji_events,
+            title: "HIGH SCORE:",
+            value: highScore,
+            gradientColors: [Color(0xFFFFD700), Color(0xFFFF8C00)],
+            shadowColor: Colors.orangeAccent,
+          ),
+
+          // ⚡ High Kills Box
+          _buildStatCard(
+            // icon: Icons.flash_on,
+            title: "HIGH KILLS:",
+            value: highKill,
+            gradientColors: [Color(0xFF00CFFF), Color(0xFF0055FF)],
+            shadowColor: Colors.blueAccent,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard({
+    // required IconData icon,
+    required String title,
+    required String value,
+    required List<Color> gradientColors,
+    required Color shadowColor,
+  }) {
+    return Container(
+      width: 150,
+      // padding: EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: gradientColors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor.withOpacity(0.5),
+            blurRadius: 12,
+            offset: Offset(0, 6),
+          ),
+        ],
+        border: Border.all(width: 3, color: Colors.white),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Icon(icon, color: Colors.white, size: 22),
+              // SizedBox(width: 5),
+              Text(
+                title,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
+                  shadows: [
+                    Shadow(color: Colors.black.withOpacity(0.6), blurRadius: 4),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          // SizedBox(height: 3),
+          Text(
+            value,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.2,
+              shadows: [
+                Shadow(color: Colors.black.withOpacity(0.8), blurRadius: 4),
+                Shadow(color: Colors.black.withOpacity(0.5), blurRadius: 8),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
   // Reusable helper widget for creating buttons with images
   Widget _buildImageButton({
     required VoidCallback onTap,
@@ -186,43 +289,43 @@ class HomeScreen extends GetView<HomeController> {
   }
 
   // The bottom sheet methods for picking skins and backgrounds remain unchanged.
-  void _showSkinPicker() {
-    final settings = Get.find<SettingsService>();
-    final skins = settings.allSkins;
-    Get.bottomSheet(
-      Container(
-        padding: const EdgeInsets.all(16),
-        decoration: const BoxDecoration(
-          color: Color(0xFF1E1E1E),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        child: Wrap(
-          runSpacing: 12,
-          spacing: 12,
-          alignment: WrapAlignment.center,
-          children: [
-            for (int i = 0; i < skins.length; i++)
-              GestureDetector(
-                onTap: () {
-                  settings.setSelectedSkinIndex(i);
-                  Get.back();
-                },
-                child: Container(
-                  width: 140,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white24),
-                    gradient: LinearGradient(colors: skins[i]),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-      isScrollControlled: true,
-    );
-  }
+  // void _showSkinPicker() {
+  //   final settings = Get.find<SettingsService>();
+  //   final skins = settings.allSkins;
+  //   Get.bottomSheet(
+  //     Container(
+  //       padding: const EdgeInsets.all(16),
+  //       decoration: const BoxDecoration(
+  //         color: Color(0xFF1E1E1E),
+  //         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+  //       ),
+  //       child: Wrap(
+  //         runSpacing: 12,
+  //         spacing: 12,
+  //         alignment: WrapAlignment.center,
+  //         children: [
+  //           for (int i = 0; i < skins.length; i++)
+  //             GestureDetector(
+  //               onTap: () {
+  //                 settings.setSelectedSkinIndex(i);
+  //                 Get.back();
+  //               },
+  //               child: Container(
+  //                 width: 140,
+  //                 height: 44,
+  //                 decoration: BoxDecoration(
+  //                   borderRadius: BorderRadius.circular(12),
+  //                   border: Border.all(color: Colors.white24),
+  //                   gradient: LinearGradient(colors: skins[i]),
+  //                 ),
+  //               ),
+  //             ),
+  //         ],
+  //       ),
+  //     ),
+  //     isScrollControlled: true,
+  //   );
+  // }
 
   void _showBackgroundPicker() {
     final settings = Get.find<SettingsService>();
