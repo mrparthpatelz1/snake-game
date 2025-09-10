@@ -21,8 +21,6 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
   final List<AiSnakeData> snakes = [];
   final List<AiSnakeData> _dyingSnakes = [];
 
-  late final List<Rect> _spawnZones;
-  int _nextZoneIndex = 0;
   int _nextId = 0;
 
   // Performance optimization counters
@@ -33,10 +31,14 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
 
   // Collision cooldowns for better survival
   final Map<AiSnakeData, double> _collisionCooldowns = {};
-  static const double COLLISION_COOLDOWN_TIME = 1.0; // Increased immunity time
+  static const double COLLISION_COOLDOWN_TIME = 1.0;
 
-  // AI snake initial length matches player
-  static const int INITIAL_SEGMENT_COUNT = 10;
+  // NEW: Fixed initial length
+  static const int AI_INITIAL_SEGMENT_COUNT = 10;
+
+  // NEW: Track spawn positions to ensure separation
+  final List<Vector2> _recentSpawnPositions = [];
+  static const double MIN_SPAWN_SEPARATION = 400.0;
 
   AiManager({
     required this.foodManager,
@@ -47,7 +49,6 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
   @override
   Future<void> onLoad() async {
     super.onLoad();
-    _initializeSpawnZones();
     _spawnAllSnakes();
   }
 
@@ -96,7 +97,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     _updateDyingSnakes(dt);
 
     // Check collisions less frequently
-    if (_frameCount % 3 == 0) { // Every 3rd frame
+    if (_frameCount % 3 == 0) {
       _checkAiVsAiCollisionsSafer(visibleRect);
     }
 
@@ -141,7 +142,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
         : AiSnakeData.deathAnimationDuration;
     snake.originalScale = 1.0;
 
-    // FIXED: Always spawn 10-15 food pellets along body
+    // Always spawn 10-15 food pellets along body
     foodManager.scatterFoodFromAiSnakeBody(
         snake.position,
         snake.headRadius,
@@ -172,7 +173,6 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     }
   }
 
-  // IMPROVED: Even safer collision detection
   void _checkAiVsAiCollisionsSafer(Rect visibleRect) {
     final visibleSnakes = snakes.where((s) =>
     !s.isDead && visibleRect.overlaps(s.boundingBox)).toList();
@@ -185,62 +185,58 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
         final snake2 = visibleSnakes[j];
         if (snake2.isDead || _collisionCooldowns.containsKey(snake2)) continue;
 
-        _checkCollisionBetweenAiSnakesVeryCareful(snake1, snake2);
+        _checkCollisionBetweenAiSnakes(snake1, snake2);
       }
     }
   }
 
-  // VERY CAREFUL: More survival-focused collision
-  void _checkCollisionBetweenAiSnakesVeryCareful(AiSnakeData snake1, AiSnakeData snake2) {
-    // Head vs Head collision - very forgiving
+  // NEW: More realistic AI vs AI collisions - like real players
+  void _checkCollisionBetweenAiSnakes(AiSnakeData snake1, AiSnakeData snake2) {
+    // Head vs Head collision
     final headDistance = snake1.position.distanceTo(snake2.position);
-    final requiredHeadDistance = (snake1.headRadius + snake2.headRadius) * 0.8; // 20% buffer
+    final requiredHeadDistance = (snake1.headRadius + snake2.headRadius) * 0.9; // Less forgiving
 
     if (headDistance <= requiredHeadDistance) {
-      // Need significant size difference to kill
-      if (snake1.headRadius > snake2.headRadius + 6.0) {
+      if (snake1.headRadius > snake2.headRadius + 2.0) { // Reduced size difference needed
         snake2.isDead = true;
-        _growSnakeWithFood(snake1, snake2.segmentCount ~/ 10);
+        _growSnakeWithFood(snake1, snake2.segmentCount ~/ 8); // More food reward
         _collisionCooldowns[snake1] = COLLISION_COOLDOWN_TIME;
-      } else if (snake2.headRadius > snake1.headRadius + 6.0) {
+      } else if (snake2.headRadius > snake1.headRadius + 2.0) {
         snake1.isDead = true;
-        _growSnakeWithFood(snake2, snake1.segmentCount ~/ 10);
+        _growSnakeWithFood(snake2, snake1.segmentCount ~/ 8);
         _collisionCooldowns[snake2] = COLLISION_COOLDOWN_TIME;
       } else {
-        // Push apart with strong force
-        final pushDirection = (snake1.position - snake2.position).normalized();
-        snake1.position += pushDirection * 30;
-        snake2.position -= pushDirection * 30;
-        _collisionCooldowns[snake1] = COLLISION_COOLDOWN_TIME;
-        _collisionCooldowns[snake2] = COLLISION_COOLDOWN_TIME;
+        // Both die if similar size
+        snake1.isDead = true;
+        snake2.isDead = true;
       }
       return;
     }
 
-    // Body collision - skip first 8 segments (large neck area)
+    // Body collision - check more segments, less forgiving
     // Snake1 head vs Snake2 body
-    for (int i = 8; i < snake2.bodySegments.length; i += 4) {
+    for (int i = 3; i < snake2.bodySegments.length; i += 2) { // Check more segments
       final segment = snake2.bodySegments[i];
       final distance = snake1.position.distanceTo(segment);
-      final requiredDistance = (snake1.headRadius + snake2.bodyRadius) * 0.75; // Very forgiving
+      final requiredDistance = (snake1.headRadius + snake2.bodyRadius) * 0.85; // Less forgiving
 
       if (distance <= requiredDistance) {
         snake2.isDead = true;
-        _growSnakeWithFood(snake1, snake2.segmentCount ~/ 10);
+        _growSnakeWithFood(snake1, snake2.segmentCount ~/ 8);
         _collisionCooldowns[snake1] = COLLISION_COOLDOWN_TIME;
         return;
       }
     }
 
     // Snake2 head vs Snake1 body
-    for (int i = 8; i < snake1.bodySegments.length; i += 4) {
+    for (int i = 3; i < snake1.bodySegments.length; i += 2) {
       final segment = snake1.bodySegments[i];
       final distance = snake2.position.distanceTo(segment);
-      final requiredDistance = (snake2.headRadius + snake1.bodyRadius) * 0.75;
+      final requiredDistance = (snake2.headRadius + snake1.bodyRadius) * 0.85;
 
       if (distance <= requiredDistance) {
         snake1.isDead = true;
-        _growSnakeWithFood(snake2, snake1.segmentCount ~/ 10);
+        _growSnakeWithFood(snake2, snake1.segmentCount ~/ 8);
         _collisionCooldowns[snake2] = COLLISION_COOLDOWN_TIME;
         return;
       }
@@ -281,6 +277,11 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
         _collisionCooldowns.remove(snake);
       }
     }
+
+    // Clean old spawn positions
+    if (_recentSpawnPositions.length > 10) {
+      _recentSpawnPositions.removeRange(0, _recentSpawnPositions.length - 10);
+    }
   }
 
   void _updateSnakeMovement(AiSnakeData snake, double dt) {
@@ -297,57 +298,107 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     snake.rebuildBoundingBox();
   }
 
-  void _initializeSpawnZones() {
-    const m = 300.0;
-    final b = SlitherGame.worldBounds.deflate(m);
-    final grid = (sqrt(numberOfSnakes)).ceil().clamp(1, 10);
-    final w = b.width / grid, h = b.height / grid;
+  // NEW: Generate offscreen spawn positions around the visible area
+  List<Vector2> _generateOffscreenSpawnPositions() {
+    final visibleRect = game.cameraComponent.visibleWorldRect;
+    final positions = <Vector2>[];
 
-    _spawnZones = List.generate(grid * grid, (i) {
-      final r = i ~/ grid, c = i % grid;
-      return Rect.fromLTWH(b.left + c * w, b.top + r * h, w, h);
-    })..shuffle(_random);
+    // Calculate spawn distance - enough to fit longest possible snake
+    final maxSnakeLength = AI_INITIAL_SEGMENT_COUNT * 13.0 + 200; // Extra margin
+    final spawnDistance = max(visibleRect.width, visibleRect.height) / 2 + maxSnakeLength;
+
+    // Generate positions around the perimeter
+    final centerX = visibleRect.center.dx;
+    final centerY = visibleRect.center.dy;
+
+    // 8 directions around the screen
+    final angles = [
+      0,              // Right
+      pi / 4,         // Bottom-right
+      pi / 2,         // Bottom
+      3 * pi / 4,     // Bottom-left
+      pi,             // Left
+      5 * pi / 4,     // Top-left
+      3 * pi / 2,     // Top
+      7 * pi / 4,     // Top-right
+    ];
+
+    for (final angle in angles) {
+      final x = centerX + cos(angle) * spawnDistance;
+      final y = centerY + sin(angle) * spawnDistance;
+
+      // Clamp to world bounds
+      final clampedX = x.clamp(SlitherGame.worldBounds.left + 100, SlitherGame.worldBounds.right - 100);
+      final clampedY = y.clamp(SlitherGame.worldBounds.top + 100, SlitherGame.worldBounds.bottom - 100);
+
+      positions.add(Vector2(clampedX, clampedY));
+    }
+
+    // Shuffle for randomness
+    positions.shuffle(_random);
+    return positions;
   }
 
+  // NEW: Find a spawn position that's separated from recent spawns
+  Vector2? _findSeparatedSpawnPosition() {
+    final candidates = _generateOffscreenSpawnPositions();
+
+    for (final candidate in candidates) {
+      bool tooClose = false;
+
+      // Check distance from recent spawn positions
+      for (final recent in _recentSpawnPositions) {
+        if (candidate.distanceTo(recent) < MIN_SPAWN_SEPARATION) {
+          tooClose = true;
+          break;
+        }
+      }
+
+      if (!tooClose) {
+        _recentSpawnPositions.add(candidate);
+        return candidate;
+      }
+    }
+
+    // If all positions are too close, use the first one anyway
+    if (candidates.isNotEmpty) {
+      final fallback = candidates.first;
+      _recentSpawnPositions.add(fallback);
+      return fallback;
+    }
+
+    return null;
+  }
+
+  // FIXED: Spawn all snakes completely outside screen with separation
   void _spawnAllSnakes() {
+    print('Spawning ${numberOfSnakes} AI snakes outside screen with length $AI_INITIAL_SEGMENT_COUNT...');
+
     for (int i = 0; i < numberOfSnakes; i++) {
-      _spawnSnake();
+      final spawnPos = _findSeparatedSpawnPosition();
+      if (spawnPos != null) {
+        _spawnSnakeAtPosition(spawnPos, isInitialSpawn: true);
+      } else {
+        print('Warning: Could not find suitable spawn position for AI snake $i');
+      }
     }
 
     if (snakes.isNotEmpty) {
-      final avgSegments = snakes.map((s) => s.segmentCount).reduce((a, b) => a + b) ~/ snakes.length;
-      print('Initial AI spawn: ${snakes.length} snakes with avg $avgSegments segments');
+      print('Initial AI spawn complete: ${snakes.length} snakes with length $AI_INITIAL_SEGMENT_COUNT (all outside screen)');
     }
   }
 
-  void _spawnSnake() {
-    if (_spawnZones.isEmpty) return;
-
-    final zone = _spawnZones[_nextZoneIndex++ % _spawnZones.length];
-    final x = zone.left + _random.nextDouble() * zone.width;
-    final y = zone.top + _random.nextDouble() * zone.height;
-    final pos = Vector2(x, y);
-    _spawnSnakeAtPosition(pos, isInitialSpawn: true);
-  }
-
-  // COMPLETELY FIXED: Spawn entire snake outside screen
-  void _spawnSnakeAt(Vector2 pos) {
-    _spawnSnakeAtPosition(pos, isInitialSpawn: false);
-  }
-
+  // FIXED: Spawn snake at position with proper offscreen body placement
   void _spawnSnakeAtPosition(Vector2 pos, {bool isInitialSpawn = false}) async {
-    final playerSegments = player.bodySegments.length;
+    // NEW: Always use fixed initial count of 8
+    int initCount = AI_INITIAL_SEGMENT_COUNT;
 
-    // Calculate spawn size relative to player (or use initial size)
-    int initCount;
-    if (isInitialSpawn || playerSegments <= INITIAL_SEGMENT_COUNT) {
-      // Initial spawn or early game - use player's initial size
-      initCount = INITIAL_SEGMENT_COUNT;
-    } else {
-      // Scale with player size
-      final minSegments = (playerSegments * 0.7).round().clamp(INITIAL_SEGMENT_COUNT, 40);
-      final maxSegments = (playerSegments * 1.1).round().clamp(INITIAL_SEGMENT_COUNT + 5, 60);
-      initCount = minSegments + _random.nextInt(maxSegments - minSegments + 1);
+    // For replacement spawns, allow some variation but stay reasonable
+    if (!isInitialSpawn) {
+      final playerSegments = player.bodySegments.length;
+      final minSegments = max(AI_INITIAL_SEGMENT_COUNT, (playerSegments * 0.6).round());
+      final maxSegments = (playerSegments * 1.2).round().clamp(AI_INITIAL_SEGMENT_COUNT, 50);
+      initCount = minSegments + _random.nextInt(max(1, maxSegments - minSegments + 1));
     }
 
     final baseSpeed = 60.0 + _random.nextDouble() * 20.0;
@@ -355,17 +406,18 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     final randomHead = _settingsService.allHeads[_random.nextInt(_settingsService.allHeads.length)];
     final headSprite = await game.loadSprite(randomHead);
 
-    // Create snake with appropriate direction
-    final spawnDirection = (Vector2.zero() - pos).normalized();
+    // NEW: Calculate direction toward player/center for more realistic movement
+    final playerPosition = player.position;
+    final towardPlayerDirection = (playerPosition - pos).normalized();
 
     final snake = AiSnakeData(
         position: pos.clone(),
         skinColors: randomSkin,
-        targetDirection: spawnDirection,
+        targetDirection: towardPlayerDirection, // Move toward player initially
         segmentCount: initCount,
         segmentSpacing: 13.0 * 0.6,
-        baseSpeed: 60,
-        boostSpeed: 130,
+        baseSpeed: 70, // Slightly faster base speed
+        boostSpeed: 140, // Faster boost speed
         minRadius: 16.0,
         maxRadius: 50.0,
         headSprite: headSprite
@@ -374,67 +426,27 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     final bonus = (initCount / 25).floor().toDouble();
     snake.headRadius = (16.0 + bonus).clamp(snake.minRadius, snake.maxRadius);
     snake.bodyRadius = snake.headRadius - 1.0;
-    snake.foodScore = (initCount - INITIAL_SEGMENT_COUNT) * snake.foodPerSegment;
+    snake.foodScore = (initCount - AI_INITIAL_SEGMENT_COUNT) * snake.foodPerSegment;
 
-    // CRITICAL FIX: Ensure entire snake spawns outside screen
-    final visibleRect = game.cameraComponent.visibleWorldRect;
-    final totalSnakeLength = initCount * snake.segmentSpacing + 100; // Extra margin
-
-    // If spawn position is too close to or inside visible area, move it far outside
-    if (!isInitialSpawn) {
-      final distToVisible = _distanceToRect(pos, visibleRect);
-
-      if (distToVisible < totalSnakeLength) {
-        // Find the nearest edge and move snake completely outside
-        final edges = [
-          {'side': 'left', 'dist': pos.x - visibleRect.left},
-          {'side': 'right', 'dist': visibleRect.right - pos.x},
-          {'side': 'top', 'dist': pos.y - visibleRect.top},
-          {'side': 'bottom', 'dist': visibleRect.bottom - pos.y},
-        ];
-
-        edges.sort((a, b) => (a['dist'] as double).compareTo(b['dist'] as double));
-        final nearestEdge = edges.first['side'] as String;
-
-        // Move snake completely outside with full body length clearance
-        switch (nearestEdge) {
-          case 'left':
-            pos.x = visibleRect.left - totalSnakeLength;
-            break;
-          case 'right':
-            pos.x = visibleRect.right + totalSnakeLength;
-            break;
-          case 'top':
-            pos.y = visibleRect.top - totalSnakeLength;
-            break;
-          case 'bottom':
-            pos.y = visibleRect.bottom + totalSnakeLength;
-            break;
-        }
-
-        // Update snake position
-        snake.position = pos.clone();
-      }
-    }
-
-    // Build body segments extending away from player/center
+    // CRITICAL: Build entire snake body extending away from player/center
     snake.bodySegments.clear();
     snake.path.clear();
 
-    // Body extends opposite to spawn direction (away from center)
-    final bodyDirection = -spawnDirection;
+    // Extend body in the direction away from player (so body is behind the head)
+    final awayFromPlayerDirection = -towardPlayerDirection;
     for (int i = 0; i < initCount; i++) {
-      final segmentPos = pos + (bodyDirection * snake.segmentSpacing * (i + 1));
+      final segmentPos = pos + (awayFromPlayerDirection * snake.segmentSpacing * (i + 1));
       snake.bodySegments.add(segmentPos);
       snake.path.add(segmentPos.clone());
     }
 
-    snake.aiState = AiState.wandering;
+    snake.aiState = AiState.seeking_center; // Start by seeking center/player
     snakes.add(snake);
     _updateBoundingBox(snake);
 
     if (!isInitialSpawn) {
-      print('Spawned AI snake with $initCount segments completely outside screen at distance ${_distanceToRect(pos, visibleRect).toStringAsFixed(0)}');
+      final visibleRect = game.cameraComponent.visibleWorldRect;
+      print('Spawned AI snake with $initCount segments moving toward player');
     }
   }
 
@@ -466,7 +478,6 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     const minActive = 10;
     const maxActive = 15;
     const spawnRadius = 1000.0;
-    const safeZone = 600.0;
 
     final near = snakes.where((s) =>
     !s.isDead && s.position.distanceTo(player.position) < spawnRadius).length;
@@ -477,49 +488,31 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
       final need = (minActive - near).clamp(0, 2);
 
       for (int i = 0; i < need; i++) {
-        Vector2? spawnPos = _findOffscreenSpawnPosition(safeZone, spawnRadius);
+        Vector2? spawnPos = _findSeparatedSpawnPosition();
 
         if (spawnPos != null) {
-          _spawnSnakeAt(spawnPos);
+          _spawnSnakeAtPosition(spawnPos, isInitialSpawn: false);
         }
       }
     }
-  }
-
-  Vector2? _findOffscreenSpawnPosition(double safeZone, double spawnRadius) {
-    final visibleRect = game.cameraComponent.visibleWorldRect;
-
-    // Always spawn well outside visible area
-    final margin = 400.0;
-    final angles = [0, pi/2, pi, 3*pi/2];
-    final angle = angles[_random.nextInt(angles.length)];
-
-    // Calculate spawn distance to ensure entire snake is outside
-    final spawnDistance = max(visibleRect.width, visibleRect.height) / 2 + margin;
-
-    final spawnPos = game.cameraComponent.visibleWorldRect.center.toVector2() +
-        Vector2(cos(angle), sin(angle)) * spawnDistance;
-
-    // Clamp to world bounds
-    spawnPos.x = spawnPos.x.clamp(
-        SlitherGame.worldBounds.left + 100,
-        SlitherGame.worldBounds.right - 100
-    );
-    spawnPos.y = spawnPos.y.clamp(
-        SlitherGame.worldBounds.top + 100,
-        SlitherGame.worldBounds.bottom - 100
-    );
-
-    return spawnPos;
   }
 
   bool _isNearPlayer(AiSnakeData snake, double range) =>
       snake.position.distanceTo(player.position) < range;
 
   void _lightPassiveUpdate(AiSnakeData snake, double dt) {
-    const speed = 40.0;
-    final dir = Vector2(cos(snake.angle), sin(snake.angle));
-    snake.position.add(dir * speed * dt);
+    const speed = 50.0; // Slightly faster passive movement
+
+    // NEW: Passive snakes also move toward center/player area
+    final toCenter = (Vector2.zero() - snake.position).normalized() * 0.3;
+    final toPlayer = (player.position - snake.position).normalized() * 0.7;
+    final combinedDirection = (toCenter + toPlayer).normalized();
+
+    final currentDir = Vector2(cos(snake.angle), sin(snake.angle));
+    final newDirection = (currentDir * 0.8 + combinedDirection * 0.2).normalized();
+
+    snake.angle = newDirection.screenAngle();
+    snake.position.add(newDirection * speed * dt);
 
     final spacing = snake.segmentSpacing;
     Vector2 leader = snake.position;
@@ -546,7 +539,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     }
 
     final targetAngle = snake.targetDirection.screenAngle();
-    const rotationSpeed = 1.8 * pi; // Slightly slower turning for safety
+    const rotationSpeed = 2.2 * pi; // Faster turning for more responsive AI
     final diff = _getAngleDiff(snake.angle, targetAngle);
     final delta = rotationSpeed * dt;
     snake.angle += (diff.abs() < delta) ? diff : delta * diff.sign;
@@ -571,13 +564,13 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     _updateBoundingBox(snake);
   }
 
-  // ULTRA DEFENSIVE: AI state for maximum survival
+  // NEW: More realistic AI behavior - like real players
   void _determineAiState(AiSnakeData snake) {
     final pos = snake.position;
     final bounds = SlitherGame.playArea;
 
-    // Priority 1: Always avoid boundaries
-    if (!_isInsideBounds(pos, bounds.deflate(400))) {
+    // Priority 1: Avoid boundaries (but less conservative)
+    if (!_isInsideBounds(pos, bounds.deflate(200))) { // Reduced from 400
       snake.aiState = AiState.avoiding_boundary;
       return;
     }
@@ -585,60 +578,75 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     final distToPlayer = pos.distanceTo(player.position);
     final playerRadius = player.playerController.headRadius.value;
 
-    // Priority 2: Strong defensive behavior near player
-    if (distToPlayer < 200) {
-      snake.aiState = AiState.defending;
-      return;
+    // Priority 2: Food seeking is now higher priority
+    final food = _findNearestFood(snake.position, 300); // Increased search range
+    if (food != null) {
+      // More willing to take risks for food
+      final isSafe = _isSafeToSeekFood(snake, food.position);
+      if (isSafe || _random.nextDouble() < 0.4) { // 40% chance to risk it
+        snake.aiState = AiState.seeking_food;
+        return;
+      }
     }
 
-    // Priority 3: Very cautious interaction
-    if (distToPlayer < 400) {
+    // Priority 3: Player interaction (more aggressive)
+    if (distToPlayer < 300) { // Increased interaction range
       final sizeDiff = snake.headRadius - playerRadius;
 
-      if (sizeDiff > 8) {
-        // Only attack if much larger
-        snake.aiState = (_random.nextDouble() < 0.2) ? AiState.attacking : AiState.wandering;
+      if (sizeDiff > 3) { // Reduced size advantage needed
+        // More likely to attack
+        snake.aiState = (_random.nextDouble() < 0.6) ? AiState.attacking : AiState.chasing;
+      } else if (sizeDiff < -3) {
+        // More strategic fleeing/defending
+        snake.aiState = (_random.nextDouble() < 0.5) ? AiState.fleeing : AiState.defending;
       } else {
-        // Flee or defend when similar or smaller
-        snake.aiState = (_random.nextDouble() < 0.8) ? AiState.fleeing : AiState.defending;
+        // Similar size - more dynamic behavior
+        final behaviors = [AiState.chasing, AiState.defending, AiState.attacking];
+        snake.aiState = behaviors[_random.nextInt(behaviors.length)];
       }
       return;
     }
 
-    // Check for nearby AI threats
+    // Priority 4: Check for AI snake opportunities
     final nearby = _getNearbyThreats(snake);
     if (nearby.isNotEmpty) {
-      final biggerThreat = nearby.any((t) => t.headRadius > snake.headRadius + 2);
+      final biggerThreat = nearby.where((t) => t.headRadius > snake.headRadius + 2);
+      final smallerTarget = nearby.where((t) => t.headRadius < snake.headRadius - 2);
 
-      if (biggerThreat) {
+      if (smallerTarget.isNotEmpty && _random.nextDouble() < 0.3) {
+        // Chase smaller AI snakes
+        snake.aiState = AiState.attacking;
+        return;
+      } else if (biggerThreat.isNotEmpty) {
         snake.aiState = AiState.fleeing;
         return;
       }
     }
 
-    // Look for food cautiously
-    final food = _findNearestFood(snake.position, 200);
-    if (food != null && _isSafeToSeekFood(snake, food.position)) {
-      snake.aiState = AiState.seeking_food;
+    // Priority 5: Seek center/action area
+    final distFromCenter = pos.distanceTo(Vector2.zero());
+    if (distFromCenter > 800) {
+      snake.aiState = AiState.seeking_center;
       return;
     }
 
+    // Default: More active wandering
     snake.aiState = AiState.wandering;
   }
 
   bool _isSafeToSeekFood(AiSnakeData snake, Vector2 foodPos) {
-    // Check if food is near threats
+    // Less conservative food seeking
     for (final other in snakes) {
       if (other == snake || other.isDead) continue;
-      if (other.headRadius > snake.headRadius &&
-          other.position.distanceTo(foodPos) < 150) {
-        return false; // Food is near a bigger snake
+      if (other.headRadius > snake.headRadius + 3 && // Reduced threat margin
+          other.position.distanceTo(foodPos) < 100) { // Reduced danger zone
+        return false;
       }
     }
 
-    // Check if food is near player when player is bigger
-    if (player.playerController.headRadius.value > snake.headRadius &&
-        player.position.distanceTo(foodPos) < 150) {
+    // Less worried about player unless much bigger
+    if (player.playerController.headRadius.value > snake.headRadius + 5 &&
+        player.position.distanceTo(foodPos) < 100) {
       return false;
     }
 
@@ -650,21 +658,24 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
       case AiState.avoiding_boundary:
         return _getBoundaryAvoidDir(snake);
       case AiState.seeking_center:
-        return (Vector2.zero() - snake.position).normalized();
+      // NEW: More direct movement toward center/player area
+        final toCenter = (Vector2.zero() - snake.position).normalized() * 0.6;
+        final toPlayer = (player.position - snake.position).normalized() * 0.4;
+        return (toCenter + toPlayer).normalized();
       case AiState.chasing:
-      // More cautious chasing
-        final pred = player.position + player.playerController.currentDir * 40;
+      // More aggressive chasing with prediction
+        final pred = player.position + player.playerController.currentDir * 60;
         return (pred - snake.position).normalized();
       case AiState.fleeing:
         return _getFleeDir(snake);
       case AiState.attacking:
-      // Careful attacking
-        final ahead = player.position + player.playerController.currentDir * 80;
+      // More sophisticated attacking
+        final ahead = player.position + player.playerController.currentDir * 100;
         return (ahead - snake.position).normalized();
       case AiState.defending:
         return _getDefendDir(snake);
       case AiState.seeking_food:
-        final f = _findNearestFood(snake.position, 200);
+        final f = _findNearestFood(snake.position, 300);
         return f != null ? (f.position - snake.position).normalized() : _wanderDir(snake);
       case AiState.wandering:
       default:
@@ -676,23 +687,23 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     final p = snake.position;
     final b = SlitherGame.playArea;
     Vector2 force = Vector2.zero();
-    const safe = 800.0; // Increased safety margin
+    const safe = 400.0; // Reduced safety margin
 
     if (p.x - b.left < safe) {
       final t = (safe - (p.x - b.left)) / safe;
-      force.x += t * t * 3; // Stronger avoidance
+      force.x += t * t * 2; // Reduced force
     }
     if (b.right - p.x < safe) {
       final t = (safe - (b.right - p.x)) / safe;
-      force.x -= t * t * 3;
+      force.x -= t * t * 2;
     }
     if (p.y - b.top < safe) {
       final t = (safe - (p.y - b.top)) / safe;
-      force.y += t * t * 3;
+      force.y += t * t * 2;
     }
     if (b.bottom - p.y < safe) {
       final t = (safe - (b.bottom - p.y)) / safe;
-      force.y -= t * t * 3;
+      force.y -= t * t * 2;
     }
 
     if (force.length < 0.1) {
@@ -704,12 +715,12 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
   Vector2 _getFleeDir(AiSnakeData snake) {
     Vector2 flee = (snake.position - player.position).normalized();
 
-    // Also flee from other bigger snakes
+    // Also flee from other bigger snakes but less drastically
     for (final other in snakes) {
       if (other == snake || other.isDead) continue;
-      if (other.headRadius > snake.headRadius &&
-          other.position.distanceTo(snake.position) < 300) {
-        flee += (snake.position - other.position).normalized() * 0.5;
+      if (other.headRadius > snake.headRadius + 2 &&
+          other.position.distanceTo(snake.position) < 250) {
+        flee += (snake.position - other.position).normalized() * 0.3; // Reduced flee force
       }
     }
 
@@ -719,26 +730,36 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
   Vector2 _getDefendDir(AiSnakeData snake) {
     final toPlayer = (player.position - snake.position).normalized();
     final perp = Vector2(-toPlayer.y, toPlayer.x);
-    final side = (_random.nextBool() ? 1.0 : -1.0);
-    return (perp * side * 0.9 + (-toPlayer) * 0.1).normalized();
+    final side = (_random.nextDouble() < 0.5 ? 1.0 : -1.0);
+
+    // More dynamic defending - sometimes circle, sometimes retreat
+    if (_random.nextDouble() < 0.3) {
+      return (perp * side).normalized(); // Circle around
+    } else {
+      return (perp * side * 0.7 + (-toPlayer) * 0.3).normalized(); // Retreat while circling
+    }
   }
 
   Vector2 _wanderDir(AiSnakeData snake) {
-    if (_random.nextDouble() < 0.015) { // Less frequent direction changes
+    if (_random.nextDouble() < 0.025) { // More frequent direction changes
       final current = Vector2(cos(snake.angle), sin(snake.angle));
-      final turn = (_random.nextDouble() - 0.5) * pi * 0.4; // Smaller turns
+      final turn = (_random.nextDouble() - 0.5) * pi * 0.6; // Larger turns
       final nd = Vector2(
         current.x * cos(turn) - current.y * sin(turn),
         current.x * sin(turn) + current.y * cos(turn),
       );
       return nd.normalized();
     }
-    final centerBias = (Vector2.zero() - snake.position).normalized() * 0.15;
-    final cur = Vector2(cos(snake.angle), sin(snake.angle));
-    return (cur + centerBias).normalized();
+
+    // Stronger bias toward center and player
+    final centerBias = (Vector2.zero() - snake.position).normalized() * 0.4;
+    final playerBias = (player.position - snake.position).normalized() * 0.3;
+    final cur = Vector2(cos(snake.angle), sin(snake.angle)) * 0.3;
+
+    return (cur + centerBias + playerBias).normalized();
   }
 
-  // VERY CONSERVATIVE: Minimal boosting for survival
+  // NEW: More strategic boosting like real players
   void _handleBoostLogic(AiSnakeData snake, double dt) {
     if (snake.boostCooldownTimer > 0) {
       snake.boostCooldownTimer -= dt;
@@ -746,17 +767,17 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
 
     if (snake.isBoosting) {
       snake.boostDuration -= dt;
-      if (snake.boostDuration <= 0 || snake.segmentCount <= 12) {
+      if (snake.boostDuration <= 0 || snake.segmentCount <= AI_INITIAL_SEGMENT_COUNT + 2) {
         snake.isBoosting = false;
-        snake.boostCooldownTimer = 4.0; // Long cooldown
+        snake.boostCooldownTimer = 2.0; // Shorter cooldown
       }
     }
 
-    if (!snake.isBoosting && snake.boostCooldownTimer <= 0 && snake.segmentCount > 25) {
+    if (!snake.isBoosting && snake.boostCooldownTimer <= 0 && snake.segmentCount > AI_INITIAL_SEGMENT_COUNT + 5) {
       final should = _shouldBoost(snake);
       if (should) {
         snake.isBoosting = true;
-        snake.boostDuration = 0.3 + _random.nextDouble() * 0.3; // Very short boosts
+        snake.boostDuration = 0.5 + _random.nextDouble() * 0.8; // Longer boosts
       }
     }
   }
@@ -764,15 +785,16 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
   bool _shouldBoost(AiSnakeData snake) {
     switch (snake.aiState) {
       case AiState.fleeing:
+        return _random.nextDouble() < 0.7; // More likely to boost when fleeing
       case AiState.avoiding_boundary:
-        return _random.nextDouble() < 0.3; // Only boost when really needed
-      case AiState.defending:
-        return _random.nextDouble() < 0.2;
+        return _random.nextDouble() < 0.5;
       case AiState.attacking:
       case AiState.chasing:
-        return _random.nextDouble() < 0.1; // Very rare offensive boost
+        return _random.nextDouble() < 0.4; // More aggressive boosting
+      case AiState.seeking_food:
+        return _random.nextDouble() < 0.2; // Sometimes boost for food
       default:
-        return false; // Never boost when wandering or seeking food
+        return _random.nextDouble() < 0.1; // Occasional random boost
     }
   }
 
@@ -781,7 +803,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     for (final o in snakes) {
       if (o == snake || o.isDead) continue;
       final d = snake.position.distanceTo(o.position);
-      if (d < 250) out.add(o);
+      if (d < 300) out.add(o); // Increased awareness range
     }
     return out;
   }
@@ -846,7 +868,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     return nearest;
   }
 
-  // Spawn replacement snakes completely offscreen
+  // FIXED: Spawn replacement snakes with proper separation
   Future<AiSnakeData> spawnNewSnake({Vector2? pos}) async {
     final random = Random();
 
@@ -854,17 +876,19 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     if (pos != null) {
       startPos = pos;
     } else {
-      startPos = _findOffscreenSpawnPosition(600, 1000) ?? Vector2.zero();
+      startPos = _findSeparatedSpawnPosition() ?? Vector2.zero();
     }
 
-    final dir = (Vector2.random(random) - Vector2(0.5, 0.5)).normalized();
+    final playerPos = player.position;
+    final dir = (playerPos - startPos).normalized(); // Move toward player
     final randomHead = _settingsService.allHeads[_random.nextInt(_settingsService.allHeads.length)];
     final headSprite = await game.loadSprite(randomHead);
 
+    // Replacement snakes can be larger
     final playerSegments = player.bodySegments.length;
-    final minSegments = (playerSegments * 0.7).round().clamp(INITIAL_SEGMENT_COUNT, 40);
-    final maxSegments = (playerSegments * 1.1).round().clamp(INITIAL_SEGMENT_COUNT + 5, 60);
-    final segmentCount = minSegments + random.nextInt(maxSegments - minSegments + 1);
+    final minSegments = max(AI_INITIAL_SEGMENT_COUNT, (playerSegments * 0.6).round());
+    final maxSegments = (playerSegments * 1.2).round().clamp(AI_INITIAL_SEGMENT_COUNT, 50);
+    final segmentCount = minSegments + random.nextInt(max(1, maxSegments - minSegments + 1));
 
     final snake = AiSnakeData(
         position: startPos,
@@ -873,7 +897,7 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
         segmentCount: segmentCount,
         segmentSpacing: 10,
         baseSpeed: 70,
-        boostSpeed: 130,
+        boostSpeed: 140,
         minRadius: 16,
         maxRadius: 50,
         headSprite: headSprite
@@ -882,16 +906,16 @@ class AiManager extends Component with HasGameReference<SlitherGame> {
     final bonus = (segmentCount / 25).floor().toDouble();
     snake.headRadius = (16.0 + bonus).clamp(snake.minRadius, snake.maxRadius);
     snake.bodyRadius = snake.headRadius - 1.0;
-    snake.foodScore = (segmentCount - INITIAL_SEGMENT_COUNT) * snake.foodPerSegment;
+    snake.foodScore = (segmentCount - AI_INITIAL_SEGMENT_COUNT) * snake.foodPerSegment;
 
-    // Build body extending away from visible area
+    // Build body extending away from player
     for (int i = 0; i < snake.segmentCount; i++) {
       snake.bodySegments.add(startPos - dir * (i * snake.segmentSpacing));
     }
     snake.rebuildBoundingBox();
 
     snakes.add(snake);
-    print('Spawned replacement AI snake with $segmentCount segments offscreen');
+    print('Spawned replacement AI snake with $segmentCount segments moving toward player');
     return snake;
   }
 
