@@ -9,6 +9,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:newer_version_snake/routes/app_pages.dart';
 
 import 'data/service/ad_service.dart';
+import 'data/service/audio_service.dart';
 import 'data/service/settings_service.dart';
 
 void main() async {
@@ -18,6 +19,10 @@ void main() async {
   MobileAds.instance.initialize();
   await GetStorage.init();
   await SettingsService().init();
+
+  // NEW: Initialize and register audio service early
+  Get.put(AudioService(), permanent: true);
+  await Get.find<AudioService>().onInit();
 
   Get.put(AdService()).loadRewardedAd();
 

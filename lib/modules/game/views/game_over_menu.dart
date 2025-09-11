@@ -1,8 +1,9 @@
-// lib/app/modules/game/views/game_over_menu.dart
+// lib/modules/game/views/game_over_menu.dart
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../data/service/score_service.dart';
+import '../../../data/service/audio_service.dart';  // NEW: Import audio service
 import '../../../routes/app_routes.dart';
 import 'game_screen.dart';
 import '../controllers/player_controller.dart';
@@ -11,12 +12,12 @@ class GameOverMenu extends StatelessWidget {
   final SlitherGame game;
   final PlayerController playerController;
   final ScoreService _scoreService = ScoreService();
+  final AudioService _audioService = Get.find<AudioService>();  // NEW: Audio service
 
-  GameOverMenu({super.key, required this.game,required this.playerController});
+  GameOverMenu({super.key, required this.game, required this.playerController});
 
   @override
   Widget build(BuildContext context) {
-  // final PlayerController _playerController = Get.find<PlayerController>();
     // Save the final scores and retrieve the high scores
     final currentScore = playerController.foodScore.value;
     final currentKills = playerController.kills.value;
@@ -25,11 +26,14 @@ class GameOverMenu extends StatelessWidget {
       _scoreService.saveHighScore(currentScore);
     }
     if (currentKills > _scoreService.getHighKills()) {
-    _scoreService.saveHighKills(currentKills);
+      _scoreService.saveHighKills(currentKills);
     }
-    // _scoreService.saveHighScore(currentScore);
-    // final highScore = _scoreService.getHighScore();
-    // final highKills = _scoreService.getHighKills();
+
+    // NEW: Play game over sound and switch to menu music
+    _audioService.playGameOver();
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _audioService.playMusic('menu');
+    });
 
     return Scaffold(
       backgroundColor: Colors.black.withOpacity(0.6),
@@ -41,6 +45,8 @@ class GameOverMenu extends StatelessWidget {
             left: 20,
             child: GestureDetector(
               onTap: () {
+                // NEW: Play button click sound
+                _audioService.playButtonClick();
                 game.resumeEngine(); // Always resume engine before navigating away
                 Get.offAllNamed(Routes.HOME);
               },
@@ -81,7 +87,6 @@ class GameOverMenu extends StatelessWidget {
                       ),
                     ],
                     fontWeight: FontWeight.bold,
-                    // shadows: const [Shadow(blurRadius: 10, color: Colors.black87)],
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -109,12 +114,8 @@ class GameOverMenu extends StatelessWidget {
                       ),
                       const SizedBox(height: 35),
                       _buildScoreRow('Your Score', currentScore.toString()),
-                      // const SizedBox(height: 15),
-                      // _buildScoreRow('High Score', highScore.toString()),
                       const SizedBox(height: 15),
                       _buildScoreRow('Kills', currentKills.toString()),
-                      // const SizedBox(height: 15),
-                      // _buildScoreRow('High Kills', highKills.toString()),
                     ],
                   ),
                 ),
@@ -123,6 +124,8 @@ class GameOverMenu extends StatelessWidget {
                 // --- HOME BUTTON ---
                 GestureDetector(
                   onTap: () {
+                    // NEW: Play button click sound
+                    _audioService.playButtonClick();
                     game.resumeEngine();
                     Get.offAllNamed(Routes.HOME);
                   },

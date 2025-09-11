@@ -10,6 +10,7 @@ import 'package:get/get.dart';
 import '../../../../data/models/food_model.dart';
 import '../../../../data/service/score_service.dart';
 import '../../../../data/service/settings_service.dart';
+import '../../../../data/service/audio_service.dart';  // NEW: Import audio service
 import '../../controllers/player_controller.dart';
 import '../../controllers/home_controller.dart';
 import '../../views/game_screen.dart';
@@ -26,6 +27,7 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
   final FoodManager foodManager;
   final ScoreService _scoreService = ScoreService();
   final SettingsService settings = Get.find<SettingsService>();
+  final AudioService _audioService = Get.find<AudioService>();  // NEW: Audio service
 
   // Get username from HomeController
   late final String username;
@@ -52,6 +54,9 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
   double _targetBoostScale = 1.0;
   final double _boostScaleSpeed = 8.0;
   final double _boostScaleMultiplier = 1.12;
+
+  // NEW: Track boost state for audio
+  bool _wasBoostingLastFrame = false;
 
   // Text rendering
   late final TextPaint _namePaint;
@@ -144,6 +149,9 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     if (isDead) return;
     isDead = true;
 
+    // NEW: Play death sound
+    _audioService.playDeath();
+
     // Strong haptic feedback for death
     HapticFeedback.heavyImpact();
 
@@ -159,11 +167,15 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
 
   void revive() {
     isDead = false;
+    // NEW: Play revive sound
+    _audioService.playRevive();
     // Haptic feedback for revive
     HapticFeedback.mediumImpact();
   }
 
   void onAiSnakeKilled() {
+    // NEW: Play kill sound
+    _audioService.playKill();
     // Light haptic feedback for AI kill
     HapticFeedback.lightImpact();
   }
@@ -183,13 +195,15 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     _targetBoostScale = canBoost ? _boostScaleMultiplier : 1.0;
     _currentBoostScale = _lerpDouble(_currentBoostScale, _targetBoostScale, 1 - exp(-_boostScaleSpeed * dt));
 
-    // Haptic feedback when boost starts/stops
-    bool wasBoostingLastFrame = false;
-    if (canBoost != wasBoostingLastFrame) {
+    // NEW: Enhanced boost audio and haptic feedback
+    if (canBoost != _wasBoostingLastFrame) {
       if (canBoost) {
+        _audioService.playBoostOn();
         HapticFeedback.selectionClick(); // Boost start
+      } else {
+        _audioService.playBoostOff();
       }
-      wasBoostingLastFrame = canBoost;
+      _wasBoostingLastFrame = canBoost;
     }
 
     _shrinkTimer.update(dt);
@@ -261,6 +275,9 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     }
 
     for (final food in candidateFood) {
+      // NEW: Play eat food sound
+      _audioService.playEatFood();
+
       // Light haptic when eating food
       HapticFeedback.selectionClick();
 
