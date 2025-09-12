@@ -18,7 +18,6 @@ class AudioService extends GetxService with WidgetsBindingObserver {
   // Reactive variables
   final RxBool isMusicEnabled = true.obs;
   final RxBool isSfxEnabled = true.obs;
-  final RxBool isHapticsEnabled = true.obs;
   final RxBool isMusicPlaying = false.obs;
   final RxDouble musicVolume = 0.7.obs;
   final RxDouble sfxVolume = 1.0.obs;
@@ -241,14 +240,6 @@ class AudioService extends GetxService with WidgetsBindingObserver {
     playSfx(isSfxEnabled.value ? 'switch_on' : 'switch_off', throttle: true);
   }
 
-  void toggleHaptics() {
-    isHapticsEnabled.value = !isHapticsEnabled.value;
-    playSfx(isHapticsEnabled.value ? 'switch_on' : 'switch_off', throttle: true);
-  }
-
-  // 🎵 SPECIFIC MUSIC HELPERS
-  // Future<void> playMenuMusic() => playMusic('menu');
-  // Future<void> playGameMusic() => playMusic('game');
 
   // 🔊 SPECIFIC SFX HELPERS
   Future<void> playButtonClick() => playSfx('button_click');

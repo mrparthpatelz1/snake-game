@@ -12,11 +12,12 @@ class CustomizationScreen extends GetView<CustomizationController> {
 
   @override
   Widget build(BuildContext context) {
+    final AudioService audioService = Get.find<AudioService>();
     return Scaffold(
       backgroundColor: const Color(0xFF0E143F),
       appBar: AppBar(
         // title: const Text('Customize Snake'),
-        leading: IconButton(onPressed: ()=> {AudioService().playButtonClick(),Get.back()}, icon: const Icon(Icons.arrow_back_ios_new,color: Colors.white,)),
+        leading: IconButton(onPressed: ()=> {audioService.playButtonClick(),Get.back()}, icon: const Icon(Icons.arrow_back_ios_new,color: Colors.white,)),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),

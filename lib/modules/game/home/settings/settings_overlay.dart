@@ -9,6 +9,7 @@ class SettingsOverlay extends GetView<SettingsController> {
 
   @override
   Widget build(BuildContext context) {
+    final AudioService audioService = Get.find<AudioService>();
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.all(10),
@@ -61,7 +62,7 @@ class SettingsOverlay extends GetView<SettingsController> {
               top: 50,
               right: 35,
               child: GestureDetector(
-                onTap: () => {AudioService().playButtonClick(),Get.back()},
+                onTap: () => {audioService.playButtonClick(),Get.back()},
                 child: Image.asset('assets/images/Close Btn.png', width: 35),
               ),
             ),

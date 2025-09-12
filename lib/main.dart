@@ -10,6 +10,7 @@ import 'package:newer_version_snake/routes/app_pages.dart';
 
 import 'data/service/ad_service.dart';
 import 'data/service/audio_service.dart';
+import 'data/service/haptic_service.dart';
 import 'data/service/settings_service.dart';
 
 void main() async {
@@ -22,6 +23,7 @@ void main() async {
 
   // 🔧 IMPROVED: Better audio service initialization
   await Get.putAsync<AudioService>(() async => AudioService());
+  await Get.putAsync<HapticService>(() async => HapticService());
 
 
   Get.put(AdService()).loadRewardedAd();

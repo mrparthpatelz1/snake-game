@@ -5,6 +5,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:newer_version_snake/data/service/haptic_service.dart';
 import 'package:newer_version_snake/data/service/score_service.dart';
 import '../../../routes/app_routes.dart';
 import '../components/world/image_background.dart';
@@ -19,6 +20,7 @@ class HomeScreen extends GetView<HomeController> {
   @override
   Widget build(BuildContext context) {
     final AudioService audioService = Get.find<AudioService>();  // NEW: Get audio service
+    final HapticService hapticService = Get.find<HapticService>();
     final screenPadding = MediaQuery.of(context).padding;
 
     return Scaffold(
@@ -33,6 +35,7 @@ class HomeScreen extends GetView<HomeController> {
               onTap: () {
                 // NEW: Play button click sound
                 audioService.playButtonClick();
+                hapticService.buttonPress();
                 controller.openSettings();
               },
               child: Image.asset('assets/images/Settings.png', width: 60),
@@ -63,6 +66,7 @@ class HomeScreen extends GetView<HomeController> {
                     onTap: () {
                       // NEW: Play button click sound
                       audioService.playButtonClick();
+                      hapticService.buttonPress();
                       Get.toNamed(Routes.CUSTOMIZATION);
                     },
                     buttonImage: 'assets/images/Snake Skin Btn.png',
@@ -76,6 +80,7 @@ class HomeScreen extends GetView<HomeController> {
                     onTap: () {
                       // NEW: Play button click sound
                       audioService.playButtonClick();
+                      hapticService.buttonPress();
                       _showBackgroundPicker();
                     },
                     buttonImage: 'assets/images/Background Skin Btn.png',
@@ -89,6 +94,7 @@ class HomeScreen extends GetView<HomeController> {
                     onTap: () {
                       // NEW: Play button click sound and switch to game music
                       audioService.playButtonClick();
+                      hapticService.buttonPress();
                       audioService.playMusic('game');
                       Get.toNamed(Routes.GAME);
                     },

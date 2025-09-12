@@ -5,11 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../../../data/service/audio_service.dart';
+import '../../../../data/service/haptic_service.dart';
 import '../../../../data/service/settings_service.dart';
 
 // --- MODIFIED: Add a TickerProvider for the animation ---
 class CustomizationController extends GetxController with GetSingleTickerProviderStateMixin {
   final settings = Get.find<SettingsService>();
+  final HapticService _hapticService = Get.find<HapticService>();
+  final AudioService audioService = Get.find<AudioService>();
 
   late final RxInt tempSelectedSkinIndex;
   late final RxInt tempSelectedHeadIndex;
@@ -55,14 +58,16 @@ class CustomizationController extends GetxController with GetSingleTickerProvide
   }
 
   void selectSkin(int index) {
-    AudioService().playButtonClick();
+    audioService.playButtonClick();
+    _hapticService.buttonPress();
     tempSelectedSkinIndex.value = index;
   }
 
 
 
   void selectHead(int index) {
-    AudioService().playButtonClick();
+    audioService.playButtonClick();
+    _hapticService.buttonPress();
     tempSelectedHeadIndex.value = index;
     _loadHeadImage(allHeads[index]);
   }
@@ -70,7 +75,8 @@ class CustomizationController extends GetxController with GetSingleTickerProvide
   void saveChanges() {
     settings.setSelectedSkinIndex(tempSelectedSkinIndex.value);
     settings.setSelectedHeadIndex(tempSelectedHeadIndex.value);
-    AudioService().playButtonClick();
+    audioService.playButtonClick();
+    _hapticService.buttonPress();
     Get.back();
     // Get.snackbar(
     //   'Saved!',

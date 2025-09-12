@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../../../data/models/food_model.dart';
+import '../../../../data/service/haptic_service.dart';
 import '../../../../data/service/score_service.dart';
 import '../../../../data/service/settings_service.dart';
 import '../../../../data/service/audio_service.dart';  // NEW: Import audio service
@@ -28,6 +29,7 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
   final ScoreService _scoreService = ScoreService();
   final SettingsService settings = Get.find<SettingsService>();
   final AudioService _audioService = Get.find<AudioService>();  // NEW: Audio service
+  final HapticService _hapticService = Get.find<HapticService>();
 
   // Get username from HomeController
   late final String username;
@@ -110,8 +112,7 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
         (playerController.segmentCount.value - playerController.initialSegmentCount);
 
     if (newSegments > 0) {
-      // Haptic feedback when growing
-      HapticFeedback.selectionClick();
+      _hapticService.grow();
 
       playerController.segmentCount.value += newSegments;
       for (int i = 0; i < newSegments; i++) {
@@ -153,7 +154,7 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     _audioService.playDeath();
 
     // Strong haptic feedback for death
-    HapticFeedback.heavyImpact();
+    _hapticService.death();
 
     foodManager.scatterFoodFromSnake(position, playerController.headRadius.value, bodySegments.length);
 
@@ -170,14 +171,14 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     // NEW: Play revive sound
     _audioService.playRevive();
     // Haptic feedback for revive
-    HapticFeedback.mediumImpact();
+    _hapticService.revive();
   }
 
   void onAiSnakeKilled() {
     // NEW: Play kill sound
     _audioService.playKill();
     // Light haptic feedback for AI kill
-    HapticFeedback.lightImpact();
+    _hapticService.kill();
   }
 
   @override
@@ -199,9 +200,10 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     if (canBoost != _wasBoostingLastFrame) {
       if (canBoost) {
         _audioService.playBoostOn();
-        HapticFeedback.selectionClick(); // Boost start
+        _hapticService.boostStart(); // Boost start
       } else {
         _audioService.playBoostOff();
+        _hapticService.boostEnd();
       }
       _wasBoostingLastFrame = canBoost;
     }
@@ -277,6 +279,7 @@ class PlayerComponent extends PositionComponent with HasGameRef<SlitherGame> {
     for (final food in candidateFood) {
       // NEW: Play eat food sound
       _audioService.playEatFood();
+      _hapticService.eatFood();
 
       // Light haptic when eating food
       HapticFeedback.selectionClick();

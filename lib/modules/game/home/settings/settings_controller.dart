@@ -2,14 +2,16 @@
 
 import 'package:get/get.dart';
 import '../../../../data/service/audio_service.dart';
+import '../../../../data/service/haptic_service.dart';
 
 class SettingsController extends GetxController {
   final AudioService _audioService = Get.find<AudioService>();
+  final HapticService _hapticService = Get.find<HapticService>();
 
   // Getters to expose audio service states
   RxBool get isSoundOn => _audioService.isSfxEnabled;
   RxBool get isMusicOn => _audioService.isMusicEnabled;
-  RxBool get isHapticOn => true.obs; // Placeholder for haptic setting
+  RxBool get isHapticOn => _hapticService.isHapticsEnabled; // Placeholder for haptic setting
 
   // Methods to toggle the state of each switch with audio feedback
   void toggleSound() {
@@ -22,7 +24,7 @@ class SettingsController extends GetxController {
 
   void toggleHaptic() {
     // Play button click sound when toggling haptic
-    _audioService.toggleHaptics();
+    _hapticService.toggleHaptics();
     // For now, we'll just play the sound effect
   }
 
