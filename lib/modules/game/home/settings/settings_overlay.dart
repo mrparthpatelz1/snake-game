@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:newer_version_snake/modules/game/home/settings/settings_controller.dart';
 
+import '../../../../data/service/audio_service.dart';
+
 class SettingsOverlay extends GetView<SettingsController> {
   const SettingsOverlay({super.key});
 
@@ -47,7 +49,7 @@ class SettingsOverlay extends GetView<SettingsController> {
                 const SizedBox(height: 15),
                 _buildSettingRow(
                   iconAsset: 'assets/images/Haptic.png',
-                  label: 'Haptic',
+                  label: 'Haptics',
                   value: controller.isHapticOn,
                   onToggle: controller.toggleHaptic,
                 ),
@@ -59,7 +61,7 @@ class SettingsOverlay extends GetView<SettingsController> {
               top: 50,
               right: 35,
               child: GestureDetector(
-                onTap: () => Get.back(),
+                onTap: () => {AudioService().playButtonClick(),Get.back()},
                 child: Image.asset('assets/images/Close Btn.png', width: 35),
               ),
             ),
@@ -91,7 +93,7 @@ class SettingsOverlay extends GetView<SettingsController> {
           Row(
             children: [
               Image.asset(iconAsset, height: 30),
-              const SizedBox(width: 15),
+              const SizedBox(width: 10),
               Text(label, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
             ],
           ),
@@ -143,6 +145,7 @@ class AnimatedSwitch extends StatelessWidget {
                 value.value ? 'assets/images/On.png' : 'assets/images/Off.png',
                 fit: BoxFit.contain,
                 width: 90,
+                height: 45,
               ),
               // 2. The Animated Knob
               AnimatedAlign(

@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import '../../../../data/service/audio_service.dart';
 import '../../../../data/service/settings_service.dart';
 
 // --- MODIFIED: Add a TickerProvider for the animation ---
@@ -54,12 +55,14 @@ class CustomizationController extends GetxController with GetSingleTickerProvide
   }
 
   void selectSkin(int index) {
+    AudioService().playButtonClick();
     tempSelectedSkinIndex.value = index;
   }
 
 
 
   void selectHead(int index) {
+    AudioService().playButtonClick();
     tempSelectedHeadIndex.value = index;
     _loadHeadImage(allHeads[index]);
   }
@@ -67,13 +70,14 @@ class CustomizationController extends GetxController with GetSingleTickerProvide
   void saveChanges() {
     settings.setSelectedSkinIndex(tempSelectedSkinIndex.value);
     settings.setSelectedHeadIndex(tempSelectedHeadIndex.value);
+    AudioService().playButtonClick();
     Get.back();
-    Get.snackbar(
-      'Saved!',
-      'Your new look has been saved.',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: Colors.green,
-      colorText: Colors.white,
-    );
+    // Get.snackbar(
+    //   'Saved!',
+    //   'Your new look has been saved.',
+    //   snackPosition: SnackPosition.BOTTOM,
+    //   backgroundColor: Colors.green,
+    //   colorText: Colors.white,
+    // );
   }
 }

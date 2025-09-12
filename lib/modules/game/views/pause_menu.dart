@@ -79,7 +79,7 @@ class PauseMenu extends StatelessWidget {
                         onTap: () {
                           // NEW: Play button click sound and switch to menu music
                           _audioService.playButtonClick();
-                          _audioService.playMusic('menu');
+                          // _audioService.playMusic('menu');
                           Get.offAllNamed(Routes.HOME);
                         },
                       ),

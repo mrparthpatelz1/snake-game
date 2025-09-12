@@ -22,18 +22,8 @@ class SettingsController extends GetxController {
 
   void toggleHaptic() {
     // Play button click sound when toggling haptic
-    _audioService.playButtonClick();
-    // TODO: Add logic here to enable/disable haptic feedback
+    _audioService.toggleHaptics();
     // For now, we'll just play the sound effect
-  }
-
-  // Additional methods for volume control (if needed)
-  void setMusicVolume(double volume) {
-    _audioService.setMusicVolume(volume);
-  }
-
-  void setSfxVolume(double volume) {
-    _audioService.setSfxVolume(volume);
   }
 
   // Play button click sound for any UI interaction

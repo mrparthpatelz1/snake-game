@@ -4,6 +4,7 @@ import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../data/service/audio_service.dart';
 import 'controllers/customization_controller.dart';
 
 class CustomizationScreen extends GetView<CustomizationController> {
@@ -15,7 +16,7 @@ class CustomizationScreen extends GetView<CustomizationController> {
       backgroundColor: const Color(0xFF0E143F),
       appBar: AppBar(
         // title: const Text('Customize Snake'),
-        leading: IconButton(onPressed: ()=>Get.back(), icon: const Icon(Icons.arrow_back_ios_new,color: Colors.white,)),
+        leading: IconButton(onPressed: ()=> {AudioService().playButtonClick(),Get.back()}, icon: const Icon(Icons.arrow_back_ios_new,color: Colors.white,)),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),

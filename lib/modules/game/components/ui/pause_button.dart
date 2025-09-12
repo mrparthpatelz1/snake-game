@@ -3,6 +3,7 @@
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flutter/material.dart';
+import 'package:newer_version_snake/data/service/audio_service.dart';
 import '../../views/game_screen.dart';
 
 class PauseButton extends PositionComponent
@@ -44,6 +45,7 @@ class PauseButton extends PositionComponent
   void onTapUp(TapUpEvent event) {
     // When tapped, pause the game engine and show the 'pauseMenu' overlay.
     game.pauseEngine();
+    AudioService().playButtonClick();
     game.overlays.add('pauseMenu');
   }
 }

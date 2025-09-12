@@ -12,9 +12,9 @@ class HomeBinding extends Bindings {
     Get.put<SettingsService>(SettingsService(), permanent: true);
 
     // NEW: Ensure AudioService is available (should already be registered in main.dart)
-    if (!Get.isRegistered<AudioService>()) {
-      Get.put<AudioService>(AudioService(), permanent: true);
-    }
+    // if (!Get.isRegistered<AudioService>()) {
+    //   Get.put<AudioService>(AudioService(), permanent: true);
+    // }
 
     Get.put<HomeController>(HomeController(), permanent: true);
   }

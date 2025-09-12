@@ -25,7 +25,7 @@ class ReviveOverlay extends GetView<ReviveController> {
               onTap: () {
                 // NEW: Play button click sound and switch to menu music
                 audioService.playButtonClick();
-                audioService.playMusic('menu');
+                // audioService.playMusic('menu');
                 controller.onHome();
               },
               child: Image.asset('assets/images/home Btn.png', width: 60),

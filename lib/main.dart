@@ -20,9 +20,9 @@ void main() async {
   await GetStorage.init();
   await SettingsService().init();
 
-  // NEW: Initialize and register audio service early
-  Get.put(AudioService(), permanent: true);
-  await Get.find<AudioService>().onInit();
+  // 🔧 IMPROVED: Better audio service initialization
+  await Get.putAsync<AudioService>(() async => AudioService());
+
 
   Get.put(AdService()).loadRewardedAd();
 
@@ -39,15 +39,53 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Using GetMaterialApp to enable GetX routing and state management.
+    // A reusable ButtonStyle that disables feedback and splash for M3 buttons.
+    final ButtonStyle _noFeedbackButtonStyle = ButtonStyle(
+      enableFeedback: false,
+      splashFactory: NoSplash.splashFactory,
+    );
+
     return GetMaterialApp(
       title: 'Slither.io Clone',
       debugShowCheckedModeBanner: false,
-      initialRoute: AppPages.INITIAL, // Set the first screen to show.
-      getPages: AppPages.routes,     // Define all the available screens/routes.
+      initialRoute: AppPages.INITIAL,
+      getPages: AppPages.routes,
+
       theme: ThemeData(
         fontFamily: 'LuckiestGuy',
+        useMaterial3: true,
+
+        // Remove ripple visuals and related ink splash everywhere by default
+        splashFactory: NoSplash.splashFactory,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+
+        // Buttons (Elevated, Text, Outlined) - disable acoustic/haptic feedback
+        elevatedButtonTheme:
+        ElevatedButtonThemeData(style: _noFeedbackButtonStyle),
+        textButtonTheme: TextButtonThemeData(style: _noFeedbackButtonStyle),
+        outlinedButtonTheme:
+        OutlinedButtonThemeData(style: _noFeedbackButtonStyle),
+
+        // IconButton (Material 3 uses ButtonStyle)
+        iconButtonTheme: IconButtonThemeData(style: _noFeedbackButtonStyle),
+
+        // FloatingActionButton - theme has enableFeedback
+        floatingActionButtonTheme:
+        const FloatingActionButtonThemeData(enableFeedback: false),
+
+        // ListTile, Tooltip (disable feedback via theme)
+        listTileTheme: const ListTileThemeData(enableFeedback: false),
+        tooltipTheme: const TooltipThemeData(enableFeedback: false),
+
+        // Other theme tweaks as needed...
       ),
+
+      // builder kept simple (no MediaQuery.copyWith for a property that doesn't exist)
+      builder: (context, child) {
+        return child!;
+      },
     );
   }
 }
+

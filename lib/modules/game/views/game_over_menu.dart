@@ -32,7 +32,7 @@ class GameOverMenu extends StatelessWidget {
     // NEW: Play game over sound and switch to menu music
     _audioService.playGameOver();
     Future.delayed(const Duration(milliseconds: 500), () {
-      _audioService.playMusic('menu');
+      // _audioService.playMusic('menu');
     });
 
     return Scaffold(
@@ -46,6 +46,7 @@ class GameOverMenu extends StatelessWidget {
             child: GestureDetector(
               onTap: () {
                 // NEW: Play button click sound
+                _audioService.stopMusic();
                 _audioService.playButtonClick();
                 game.resumeEngine(); // Always resume engine before navigating away
                 Get.offAllNamed(Routes.HOME);
@@ -125,6 +126,7 @@ class GameOverMenu extends StatelessWidget {
                 GestureDetector(
                   onTap: () {
                     // NEW: Play button click sound
+                    _audioService.stopMusic();
                     _audioService.playButtonClick();
                     game.resumeEngine();
                     Get.offAllNamed(Routes.HOME);
